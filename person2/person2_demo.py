@@ -37,11 +37,6 @@ st.success(f"Using {len(df):,} actual survey responses.")
 # Dashboard title
 st.title("988 Survey Analysis Dashboard")
 
-st.warning(
-    "DEMO MODE: This dashboard currently uses synthetic data, "
-    "not actual survey responses."
-)
-
 st.write(
     "Explore knowledge changes, willingness to call 988, "
     "subgroup differences, and evidence-based findings."
