@@ -115,11 +115,7 @@ with learning_tab:
         "Decreased"
     ]
 
-    st.dataframe(
-        display_knowledge.round(2),
-        use_container_width=True,
-        hide_index=True
-    )
+    st.table(display_knowledge.round(2))
 
 with action_tab:
     st.header("Knowledge vs. Action")
