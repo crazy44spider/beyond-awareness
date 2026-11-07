@@ -179,27 +179,12 @@ with equity_tab:
     st.header("Equity Lens")
 
     st.write(
-        "Compare knowledge and willingness across different "
-        "participant groups."
+        "Compare knowledge and willingness across counties."
     )
 
-    group_options = {
-        "County": "county",
-        "Participant Type": "participant_type",
-        "Language": "language",
-        "Role": "role_list"
-    }
+    subgroup_data = subgroup_summary(df, "county")
 
-    selected_group = st.selectbox(
-        "Choose a group to analyze:",
-        list(group_options.keys())
-    )
-
-    group_column = group_options[selected_group]
-
-    subgroup_data = subgroup_summary(df, group_column)
-
-    st.subheader(f"Results by {selected_group}")
+    st.subheader("Results by County")
 
     st.dataframe(
         subgroup_data.round(2),
@@ -209,8 +194,8 @@ with equity_tab:
 
     st.caption(
         "Groups with fewer than 20 participants are labeled "
-        "descriptive only. Role totals may exceed unique "
-        "participant totals because people can select multiple roles."
+        "descriptive only. County represents training affiliation, "
+        "not verified participant residence."
     )
 
 with findings_tab:
