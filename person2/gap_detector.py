@@ -377,19 +377,4 @@ def detect_findings(df):
     # 4. Examine correlation when it can be calculated
     correlation = comparison["spearman_correlation"]
 
-    if pd.notna(correlation):
-        findings.append({
-            "type": "correlation",
-            "title": "Knowledge and willingness association",
-            "evidence": (
-                f"Spearman correlation: {correlation:.2f} "
-                f"(n={comparison['complete_case_n']})."
-            ),
-            "limitation": (
-                "Correlation describes association, not causation. "
-                "It uses complete cases only and may not represent "
-                "all participants."
-            )
-        })
-
     return findings

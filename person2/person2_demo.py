@@ -60,7 +60,6 @@ with col2:
     paired_counts = " / ".join(
         str(n) for n in knowledge["paired_n"]
     )
-    st.metric("Paired Knowledge n", paired_counts)
 
 with col3:
     st.metric("Willingness Answers", willingness["answered"])
@@ -97,7 +96,6 @@ with learning_tab:
     display_knowledge = knowledge[
         [
             "label",
-            "paired_n",
             "recalled_before_mean",
             "current_mean",
             "mean_difference",
@@ -109,7 +107,6 @@ with learning_tab:
 
     display_knowledge.columns = [
         "Topic",
-        "Paired n",
         "Recalled Before Mean",
         "Current Mean",
         "Mean Difference",
