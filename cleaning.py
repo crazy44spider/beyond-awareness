@@ -1,10 +1,3 @@
-"""Beyond Awareness survey loading, validation, cleaning, and quality checks.
-
-Requires pandas and openpyxl. Does not print, save, or export participant data.
-Keep the dataframe returned by load_survey as your untouched raw copy.
-The cleaned dataframe still contains sensitive text; do not publish it.
-"""
-
 from __future__ import annotations
 
 from copy import deepcopy
