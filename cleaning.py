@@ -381,6 +381,7 @@ if __name__ == "__main__":
     try:
         raw = load_survey(args.workbook, sheet_name=args.sheet)
         cleaned, cleaning_audit = clean_survey(raw)
+        cleaned.to_csv("cleaned_survey.csv", index=False)
         # Aggregate diagnostics only; never print participant records or comments.
         print(json.dumps(summarize_quality(cleaned, cleaning_audit), indent=2))
     except (ValueError, OSError, ImportError) as exc:

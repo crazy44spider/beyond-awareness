@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 
+from pathlib import Path
 from sample_data import create_sample_data
 
 from gap_detector import (
@@ -19,10 +20,19 @@ st.set_page_config(
     layout="wide"
 )
 
+# Load cleaned survey data
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_PATH = BASE_DIR / "cleaned_survey.csv"
 
-# Demo data
-df = create_sample_data()
+if not DATA_PATH.exists():
+    st.error(
+        "Cleaned survey data not found. "
+        "Please run cleaning.py first."
+    )
+    st.stop()
 
+df = pd.read_csv(DATA_PATH)
+st.success(f"Using {len(df):,} actual survey responses.")
 
 # Dashboard title
 st.title("988 Survey Analysis Dashboard")
