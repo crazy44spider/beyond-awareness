@@ -14,5 +14,11 @@ def create_sample_data():
         "willingness_to_call": [8, 5, None, 7],
         "county": ["A", "B", "A", "C"],
         "participant_type": ["Staff", "Student", "Staff", "Student"],
-        "language": ["English", "English", "Spanish", "English"]
+        "language": ["English", "English", "Spanish", "English"],
+        "role_list": [
+            ["Staff", "Volunteer"],
+            ["Student"],
+            ["Staff", "Educator"],
+            ["Student", "Volunteer"]
+        ]
     })
