@@ -21,13 +21,14 @@ from person2.gap_detector import (
     knowledge_vs_willingness,
     willingness_summary,
 )
-from person4.survey_designer import analyze_survey
+from person4.survey_designer import analyze_survey, coverage_audit
 from intervention_planner import (
     DIMENSION_NAMES, build_action_plan, get_dimension_info,
     get_intervention, recommend_interventions,
 )
 from ui_styles import intro, stat_cards, focus_card
 from report_generator import generate_report
+from feedback_analyzer import analyze_feedback
 
 
 def build_action_findings(clean_df: pd.DataFrame) -> list[dict]:
@@ -371,7 +372,7 @@ def render_action_lab(clean_df: pd.DataFrame) -> None:
 
 
 def to_person5_metrics(clean_df: pd.DataFrame, summary: dict, source_label: str) -> dict:
-    """Translate Person 1's aggregate summary into Person 5's PDF schema."""
+    """Use current filtered data for PDF figures, not hardcoded audit statuses."""
     overview = summary.get("overview", {})
     n = int(overview.get("survey_rows", len(clean_df)))
     topics = summary.get("knowledge", {}).get("topics", {})
@@ -385,16 +386,65 @@ def to_person5_metrics(clean_df: pd.DataFrame, summary: dict, source_label: str)
         for topic, stats in topics.items()
     ]
 
-    dates = clean_df["training_date"].dropna() if "training_date" in clean_df else pd.Series(dtype="datetime64[ns]")
+    dates = (
+        clean_df["training_date"].dropna()
+        if "training_date" in clean_df else pd.Series(dtype="datetime64[ns]")
+    )
     period = "Not available"
     if not dates.empty:
         period = f"{dates.min():%Y-%m-%d} to {dates.max():%Y-%m-%d}"
+
+    relation = knowledge_vs_willingness(clean_df) if not clean_df.empty else {}
+    paired = int(relation.get("complete_case_n", 0))
+    gap_n = int(relation.get("gap_count", 0))
+    relation_summary = (
+        f"{gap_n} of {paired} paired answers ({100*gap_n/paired:.1f}%) "
+        "reported knowing when to use 988 at 4–5 of 5 but willingness "
+        "to call at 0–5 of 10. The survey does not establish why."
+        if paired else
+        "No paired knowledge-and-willingness answers were available."
+    )
+
+    # Question columns are retained in the cleaned frame. A revised upload
+    # must therefore change both the Survey Designer AND the PDF audit.
+    design = coverage_audit(clean_df)
+    audit_map = {
+        "Cultural & Linguistic": "Cultural and social norms",
+        "Socioeconomic & Practical": "Practical / socioeconomic",
+        "Communication": "Communication access",
+        "Institutional Trust": "Institutional trust",
+        "Psychological": "Psychological comfort",
+    }
+    statuses = {
+        "Directly measured": "Measured (added question)",
+        "Partially measured": "Partially measured",
+        "Not directly measured": "Unmeasured",
+    }
+    dimension_status = {
+        audit_map[row["dimension"]]: statuses.get(row["coverage"], "Unmeasured")
+        for _, row in design.iterrows()
+        if row["dimension"] in audit_map
+    }
+
+    # Include preliminary theme counts as preliminary, not validated. No
+    # individual comments or ID-keyed translations leave the PDF metrics.
+    themes = []
+    if not clean_df.empty:
+        feedback = analyze_feedback(clean_df)
+        count = int(feedback["data"]["improve_en"].notna().sum())
+        from story_pages import _pick_themes
+        counts = _pick_themes(feedback["improve_counts"], max_items=5)
+        themes = [
+            {"theme": str(label), "count": int(value),
+             "denominator": count, "validated": False}
+            for label, value in counts.items()
+        ]
 
     return {
         "status": "synthetic" if source_label.startswith("Synthetic") else "real",
         "dataset_period": period,
         "n_responses": n,
-        "responses_verified": not source_label.startswith("Synthetic"),
+        "responses_verified": False,
         "scale_note": "Recalled-before and current knowledge on the 1–5 response scale.",
         "scale_max": 5,
         "knowledge": knowledge_rows,
@@ -402,17 +452,13 @@ def to_person5_metrics(clean_df: pd.DataFrame, summary: dict, source_label: str)
             "n_answered": int(overview.get("willingness_valid_n", 0)),
             "n_total": n,
         },
-        # No qualitative themes are claimed validated until Person 3
-        # supplies an import-safe analyzer and manual classification checks.
-        "themes": [],
-        "approved_excerpts": [],
-        "dimension_status": {
-            "Cultural and social norms": "Unmeasured",
-            "Practical / socioeconomic": "Unmeasured",
-            "Communication access": "Indirectly mentioned",
-            "Institutional trust": "Unmeasured",
-            "Psychological comfort": "Unmeasured",
+        "knowledge_call_relationship": {
+            "n": paired,
+            "summary": relation_summary,
         },
+        "themes": themes,
+        "approved_excerpts": [],
+        "dimension_status": dimension_status,
     }
 
 
