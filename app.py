@@ -30,6 +30,7 @@ from io import BytesIO
 import json
 import math
 from numbers import Real
+from pathlib import Path
 import random
 
 import pandas as pd
@@ -218,29 +219,67 @@ def render_team_page(page, clean_df):
 
 
 def select_source():
-    source = st.sidebar.radio("Data source", ["Synthetic demo", "Upload survey workbook"], key="source_mode")
-    if source == "Synthetic demo":
-        return demo_result(), "Synthetic demo · not survey evidence", "demo-v1"
-    st.sidebar.caption("Use real data only in an approved local or private environment. No workbook is written to disk or placed in the shared cache.")
-    workbook = st.sidebar.file_uploader("Survey workbook (.xlsx)", type=["xlsx"], key="survey_upload")
-    if workbook is None:
-        st.info("Choose your survey Excel workbook in the sidebar, or switch to Synthetic demo.")
+    """Use the local real workbook when available; otherwise ask for an upload.
+
+    Synthetic examples are an explicit testing choice, never the default.
+    Keep real rows private to this local Streamlit session.
+    """
+    local_workbook = Path(__file__).resolve().parent / "survey_data.xlsx"
+    with st.sidebar.expander("Data source", expanded=False):
+        mode = st.radio(
+            "Use",
+            ["Real survey", "Synthetic test data"],
+            key="source_mode_v2",
+            label_visibility="collapsed",
+        )
+        if mode == "Real survey":
+            uploaded = st.file_uploader(
+                "Replace with a survey workbook",
+                type=["xlsx"],
+                key="survey_upload",
+                help="Use a private/local environment for participant data.",
+            )
+        else:
+            uploaded = None
+
+    if mode == "Synthetic test data":
+        return demo_result(), "Synthetic test data", "demo-v1"
+
+    if uploaded is not None:
+        content = uploaded.getvalue()
+        token = "uploaded-" + sha256(content).hexdigest()
+        source = BytesIO(content)
+        label = "Uploaded survey"
+    elif local_workbook.is_file():
+        # Local-only convenience: don't commit the workbook to GitHub.
+        # Fingerprint metadata to refresh when the workbook is replaced.
+        stat = local_workbook.stat()
+        token = f"local-{stat.st_size}-{stat.st_mtime_ns}"
+        source = local_workbook
+        label = "EveryMind survey"
+    else:
+        st.info(
+            "To see the real survey, put survey_data.xlsx beside app.py, "
+            "or upload the Excel workbook in the Data source section of the sidebar."
+        )
         st.stop()
-    content = workbook.getvalue()
-    token = sha256(content).hexdigest()
+
     if st.session_state.get("upload_token") != token:
-        # Never leave the previous workbook active after an unsuccessful load.
         st.session_state.pop("uploaded_result", None)
         st.session_state.pop("upload_token", None)
         try:
-            with st.spinner("Validating the workbook and preparing summaries…"):
-                result = run_pipeline(BytesIO(content))
+            with st.spinner("Loading survey responses…"):
+                result = run_pipeline(source)
         except Exception:
-            st.error("Unable to load this workbook. It must contain the 'Survey Data' sheet and the expected 20 columns. Check it with cleaning.py for a detailed schema or file error.")
+            st.error(
+                "Could not read the survey workbook. Check that it contains "
+                "the 'Survey Data' worksheet and the expected columns."
+            )
             st.stop()
         st.session_state["uploaded_result"] = result
         st.session_state["upload_token"] = token
-    return st.session_state["uploaded_result"], "Uploaded survey · private session", token
+
+    return st.session_state["uploaded_result"], label, token
 
 
 def sidebar_filters(clean_df, token):
@@ -257,8 +296,8 @@ def sidebar_filters(clean_df, token):
         st.session_state["filter_source"] = token
         st.session_state["loaded_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
-    with st.sidebar.expander("🔎  Refine responses", expanded=False):
-        st.caption("Optional · filter every page using the same selection")
+    with st.sidebar.expander("🔎  Filter responses", expanded=False):
+        st.caption("Filters apply to every page.")
         counties = st.multiselect(
             "Training county",
             sorted(clean_df["county"].dropna().unique()),
@@ -292,8 +331,8 @@ def sidebar_filters(clean_df, token):
                 st.stop()
             start, end = selected
 
-        st.caption("Blank selections include every group. Multi-role responses are counted once.")
-        st.markdown("**Advanced comparison settings**")
+        
+        
         min_n = int(
             st.number_input(
                 "Minimum paired responses",
@@ -371,26 +410,23 @@ def main():
         '</div>',
         unsafe_allow_html=True,
     )
-    st.sidebar.caption("From insight to action · More accessible support")
+    result, source_label, token = select_source()
+    filtered, selections, min_n = sidebar_filters(result.clean_df, token)
+
+    st.sidebar.divider()
     page = st.sidebar.radio(
-        "Navigation",
+        "Pages",
         PAGES,
         format_func=lambda item: NAV_LABELS[item],
         label_visibility="collapsed",
         key="workspace_page",
     )
 
-    result, source_label, token = select_source()
-    filtered, selections, min_n = sidebar_filters(result.clean_df, token)
     summary = build_summary(filtered, min_group_n=min_n)
 
-    st.caption(
-        f"{source_label} · {len(filtered):,} of {len(result.clean_df):,} responses in view · Loaded {st.session_state['loaded_at']}"
-    )
+    st.caption(f"{source_label} · {len(filtered):,} of {len(result.clean_df):,} responses")
     if source_label.startswith("Synthetic"):
-        st.warning(
-            "SYNTHETIC DEMONSTRATION · Fictional responses, not EveryMind findings."
-        )
+        st.warning("TEST DATA · Not real survey results.")
 
     if page == "Overview":
         render_dashboard(filtered, summary)
