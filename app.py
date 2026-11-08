@@ -303,48 +303,66 @@ def render_participant_voices(clean_df):
             st.write(str(value))
 
 def select_source():
-    """Use the local real workbook when available; otherwise ask for an upload.
+    """Top-of-page source selector; preserve the private in-memory data pipeline.
 
-    Synthetic examples are an explicit testing choice, never the default.
-    Keep real rows private to this local Streamlit session.
+    Real local survey is the default. Uploaded synthetic workbooks can be
+    explicitly marked as testing data (and are auto-suggested based on name).
     """
     local_workbook = Path(__file__).resolve().parent / "survey_data.xlsx"
-    with st.sidebar.expander("Data source", expanded=False):
+    with st.popover("Data source", use_container_width=True):
         mode = st.radio(
-            "Use",
+            "Choose survey data",
             ["Real survey", "Synthetic test data"],
             key="source_mode_v2",
-            label_visibility="collapsed",
         )
         if mode == "Real survey":
             uploaded = st.file_uploader(
-                "Replace with a survey workbook",
+                "Upload or replace the survey",
                 type=["xlsx"],
                 key="survey_upload",
-                help="Use a private/local environment for participant data.",
+                help="The workbook remains in your private session. Use the 20-column survey format.",
             )
+            if uploaded is None and local_workbook.is_file():
+                st.caption("Using the local survey_data.xlsx until you upload another workbook.")
+            if uploaded is not None:
+                upload_identity = f"{uploaded.name}:{uploaded.size}"
+                if st.session_state.get("test_flag_filename") != upload_identity:
+                    st.session_state["upload_is_test"] = any(
+                        word in uploaded.name.casefold()
+                        for word in ("synthetic", "fictional", "fake", "demo")
+                    )
+                    st.session_state["test_flag_filename"] = upload_identity
+                fictional = st.checkbox(
+                    "This uploaded workbook is fictional test data",
+                    key="upload_is_test",
+                    help="Prevents demo results and PDF reports being labeled as real survey evidence.",
+                )
+            else:
+                fictional = False
         else:
             uploaded = None
+            fictional = True
+            st.caption("Built-in fictional examples for testing.")
 
     if mode == "Synthetic test data":
         return demo_result(), "Synthetic test data", "demo-v1"
 
     if uploaded is not None:
         content = uploaded.getvalue()
-        token = "uploaded-" + sha256(content).hexdigest()
+        digest = sha256(content).hexdigest()
+        token = "uploaded-" + digest + ("-test" if fictional else "-real")
         source = BytesIO(content)
-        label = "Uploaded survey"
+        label = "Synthetic uploaded survey" if fictional else "Uploaded survey"
     elif local_workbook.is_file():
-        # Local-only convenience: don't commit the workbook to GitHub.
-        # Fingerprint metadata to refresh when the workbook is replaced.
+        # No private respondent-level workbook is pushed to GitHub.
         stat = local_workbook.stat()
         token = f"local-{stat.st_size}-{stat.st_mtime_ns}"
         source = local_workbook
         label = "EveryMind survey"
     else:
         st.info(
-            "To see the real survey, put survey_data.xlsx beside app.py, "
-            "or upload the Excel workbook in the Data source section of the sidebar."
+            "Upload a survey in Data source above, or place survey_data.xlsx "
+            "beside app.py to use it locally."
         )
         st.stop()
 
@@ -356,8 +374,8 @@ def select_source():
                 result = run_pipeline(source)
         except Exception:
             st.error(
-                "Could not read the survey workbook. Check that it contains "
-                "the 'Survey Data' worksheet and the expected columns."
+                "Could not read the workbook. Check for a 'Survey Data' sheet "
+                "and the expected 20 survey columns."
             )
             st.stop()
         st.session_state["uploaded_result"] = result
@@ -367,16 +385,18 @@ def select_source():
 
 
 def sidebar_filters(clean_df, token):
-    """Keep all filters, but tuck them into one optional sidebar drawer."""
+    """Top-toolbar filters. This retains all original filter behavior/keys."""
     if st.session_state.get("filter_source") != token:
         for key in [
             "filter_counties", "filter_roles", "filter_languages",
             "filter_dates_enabled", "filter_dates",
         ]:
             st.session_state.pop(key, None)
-        # Don't reuse actions or an exported report from the previous workbook.
-        for key in ["chosen_actions", "generated_pdf_bytes", "generated_pdf_signature",
-                    "story_extra_actions", "story_survey_selected", "story_filters_token"]:
+        # A different dataset must never inherit an old PDF or action plan.
+        for key in [
+            "chosen_actions", "generated_pdf_bytes", "generated_pdf_signature",
+            "story_extra_actions", "story_survey_selected", "story_filters_token",
+        ]:
             st.session_state.pop(key, None)
         for key in list(st.session_state.keys()):
             if key.startswith(("story_action_", "voice_theme_", "private_voice_")):
@@ -384,8 +404,11 @@ def sidebar_filters(clean_df, token):
         st.session_state["filter_source"] = token
         st.session_state["loaded_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
-    with st.sidebar.expander("🔎  Filter responses", expanded=False):
-        st.caption("Filters apply to every page.")
+    active = sum(bool(st.session_state.get(key)) for key in [
+        "filter_counties", "filter_roles", "filter_languages", "filter_dates_enabled",
+    ])
+    with st.popover(f"Filters ({active})" if active else "Filter responses", use_container_width=True):
+        st.caption("Apply these to every page.")
         counties = st.multiselect(
             "Training county",
             sorted(clean_df["county"].dropna().unique()),
@@ -415,23 +438,19 @@ def sidebar_filters(clean_df, token):
                 key="filter_dates",
             )
             if len(selected) != 2:
-                st.info("Select both the start and end dates.")
+                st.info("Choose both start and end dates.")
                 st.stop()
             start, end = selected
-
-        
-        
-        min_n = int(
-            st.number_input(
+        with st.expander("Advanced comparison setting"):
+            min_n = int(st.number_input(
                 "Minimum paired responses",
                 min_value=1,
                 max_value=10000,
                 value=20,
                 step=1,
                 key="min_group_n",
-                help="Groups with fewer paired answers than this are not compared.",
-            )
-        )
+                help="Comparison groups with fewer paired answers are suppressed.",
+            ))
 
     filtered = filter_survey(
         clean_df,
@@ -449,7 +468,6 @@ def sidebar_filters(clean_df, token):
         "end_date": end.isoformat() if end else None,
         "min_group_n": min_n,
     }
-    st.sidebar.caption(f"Viewing **{len(filtered):,}** of {len(clean_df):,} survey rows")
     return filtered, selections, min_n
 
 
@@ -482,52 +500,83 @@ def render_report(clean_df, summary, selections, source_label):
 
 
 
+def _choose_page(name):
+    """Navigation callback: keeps the original page key for deep-link buttons."""
+    st.session_state["workspace_page"] = name
+
+
 def main():
     st.set_page_config(
         page_title="Beyond Awareness | EveryMind",
         layout="wide",
         initial_sidebar_state="expanded",
     )
-    # The original style layer remains intact for legacy views.
+    # Legacy analysis styles remain, with the newer forest theme layered above.
     style_app()
     apply_theme()
 
+    # Compact navigation only: data and filters belong in the content toolbar.
     st.sidebar.markdown(
-        '<div style="margin:6px 0 18px">'
-        '<div style="display:inline-block;border:1px solid #8DBB9B;'
-        'border-radius:9px;padding:7px 9px;color:#F4F7EF;'
-        'font-size:.8rem;font-weight:800;letter-spacing:.10em">B/A</div>'
-        '<div style="font-family:Georgia,serif;color:#FFFDF7;font-size:1.6rem;'
-        'line-height:1.1;margin-top:12px">Beyond<br>Awareness</div>'
-        '<div style="color:#B9D4C0;font-size:.76rem;margin-top:7px">'
-        'EveryMind · 988 training</div></div>',
+        '<div class="ba-nav-brand">'
+        '<div class="ba-nav-monogram">BA</div>'
+        '<div class="ba-nav-title">BEYOND<br>AWARENESS</div>'
+        '</div>',
         unsafe_allow_html=True,
     )
-
-    result, source_label, token = select_source()
-    filtered, selections, min_n = sidebar_filters(result.clean_df, token)
-
-    st.sidebar.divider()
-    st.sidebar.caption("EXPLORE")
+    st.sidebar.markdown(
+        '<div class="ba-nav-section">WORKSPACE</div>',
+        unsafe_allow_html=True,
+    )
     if st.session_state.get("workspace_page") not in PAGES:
         st.session_state["workspace_page"] = "Overview"
-    page = st.sidebar.radio(
-        "Pages",
-        PAGES,
-        format_func=lambda item: NAV_LABELS[item],
-        label_visibility="collapsed",
-        key="workspace_page",
-    )
 
-    # Re-selecting a subset must not carry a previously generated PDF or action
-    # selection into a different evidence base.
+    for name in PAGES:
+        if name == "Detailed Analysis":
+            st.sidebar.markdown(
+                '<div class="ba-nav-section ba-nav-secondary">TOOLS</div>',
+                unsafe_allow_html=True,
+            )
+        st.sidebar.button(
+            NAV_LABELS[name],
+            key="nav_" + name.lower().replace(" ", "_"),
+            on_click=_choose_page,
+            args=(name,),
+            type="primary" if st.session_state["workspace_page"] == name else "secondary",
+            use_container_width=True,
+        )
+    page = st.session_state["workspace_page"]
+
+    # Top-of-page toolbar exists consistently across all routes. Source first
+    # (needed for the filtered DataFrame); its visual position remains on right.
+    with st.container(border=True):
+        status_col, source_col, filters_col = st.columns(
+            [3.5, 1.5, 1.7],
+            gap="small",
+            vertical_alignment="center",
+        )
+        with source_col:
+            result, source_label, token = select_source()
+        with filters_col:
+            filtered, selections, min_n = sidebar_filters(result.clean_df, token)
+        with status_col:
+            label = source_label.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            st.markdown(
+                '<div class="ba-data-toolbar-label">ACTIVE SURVEY</div>'
+                '<div class="ba-data-toolbar-status">'
+                + f"{len(filtered):,} responses <span>· {label}</span></div>",
+                unsafe_allow_html=True,
+            )
+
+    # Filters and source changes invalidate prior selected actions and PDF.
     current_filter_token = json.dumps(
         {"source": token, "selections": selections},
         sort_keys=True, default=str,
     )
     if st.session_state.get("story_filters_token") != current_filter_token:
-        for name in ("chosen_actions", "generated_pdf_bytes", "generated_pdf_signature",
-                     "story_extra_actions", "story_survey_selected"):
+        for name in (
+            "chosen_actions", "generated_pdf_bytes", "generated_pdf_signature",
+            "story_extra_actions", "story_survey_selected",
+        ):
             st.session_state.pop(name, None)
         for name in list(st.session_state.keys()):
             if name.startswith(("story_action_", "voice_theme_", "private_voice_")):
@@ -536,9 +585,8 @@ def main():
 
     summary = build_summary(filtered, min_group_n=min_n)
 
-    st.caption(f"{source_label}  ·  {len(filtered):,} responses selected")
     if source_label.startswith("Synthetic"):
-        st.warning("TEST DATA — this is not EveryMind survey evidence.")
+        st.warning("TEST DATA — these results are fictional, not EveryMind survey evidence.")
 
     if page == "Overview":
         render_overview(filtered, summary, source_label)
