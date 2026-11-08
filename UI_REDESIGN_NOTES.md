@@ -5,6 +5,7 @@ This branch is **visual/UI work only** on top of the team's integration draft (`
 ## Design principles
 - Light lavender/cream instead of the dark default; mint and peach for gentle differentiation.
 - Start with **responses, observed knowledge patterns, answer coverage, and actionable unknowns**.
+- Default to the private local `survey_data.xlsx` (real workbook); fictional demo mode must be chosen deliberately. Never commit participant-level workbooks.
 - Show technical scores, paired counts, distributions, Spearman correlation, group comparisons and data-quality reports only on request.
 - Never imply missing call-intent responses mean unwillingness, or that retrospective ratings prove training caused an improvement.
 - Keep survey-design concerns separate from verified participant concerns.
@@ -13,7 +14,7 @@ This branch is **visual/UI work only** on top of the team's integration draft (`
 ## Files changed
 - `.streamlit/config.toml`: Streamlit light theme (restart the server to apply).
 - `ui_styles.py`: shared styling and insight-card components. Selectboxes show a **pointer**, not an I-beam; single-choice caret hidden; multi-select search still works.
-- `app.py`: friendlier navigation; optional filter drawer and JSON export; all routes preserved.
+- `app.py`: local real survey first; optional data-source and filter drawers near the top of the sidebar; all routes preserved.
 - `dashboard.py`: simplified Overview, with **all five original deep-dive tabs** inside `Explore detailed analysis`.
 - `team_integration.py`: human-readable Gap Detector; Action Lab has recommendation, comparison, inclusive action lens and plan tabs.
 - `person4/survey_designer.py`: question cards and progressive disclosure; all 10 questions and CSV export unchanged.
@@ -34,7 +35,7 @@ python -m streamlit run app.py
 If already on a local copy of this branch, use `git switch redesign-friendly-light-ui-nov7` instead of creating another tracking branch.
 
 ## Manual review checklist
-1. Open Overview in Synthetic demo. Verify pastel cards, one readable knowledge chart, and a visible synthetic-data warning.
+1. With `survey_data.xlsx` in the project root, open Overview and verify 1,299 responses (assuming the complete original workbook) and **no** synthetic-data warning. Select Synthetic test data deliberately to check its shorter warning.
 2. Expand `Explore detailed analysis`: confirm knowledge, training experience, representation, answer coverage, and group comparisons still work.
 3. Expand `Refine responses` in the sidebar; try all county/role/language/date filters and the paired-n threshold.
 4. Open Gap Detector; expand `Detailed evidence` for the original stats, willingness distribution, and correlation.
