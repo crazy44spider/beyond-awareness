@@ -390,14 +390,16 @@ def _filter_option_key(state_key: str, index: int) -> str:
 
 
 def _set_filter_choices(state_key: str, options: list[str], checked: bool) -> None:
-    """Runs as a widget callback, before the next Streamlit render."""
+    """Runs before rerender; keep the section open for further selections."""
+    st.session_state["filter_open_section"] = state_key
     st.session_state[state_key] = list(options) if checked else []
     for index in range(len(options)):
         st.session_state[_filter_option_key(state_key, index)] = checked
 
 
 def _sync_filter_choices(state_key: str, options: list[str]) -> None:
-    """Keep the toolbar's active-filter count current on the same rerun."""
+    """Update selected options while keeping the current checklist expanded."""
+    st.session_state["filter_open_section"] = state_key
     st.session_state[state_key] = [
         option for index, option in enumerate(options)
         if st.session_state.get(_filter_option_key(state_key, index), False)
@@ -418,7 +420,10 @@ def _checklist_filter(label: str, options, state_key: str) -> list[str]:
     else:
         selection_label = f"{len(selected)} selected"
 
-    with st.expander(f"{label} · {selection_label}", expanded=False):
+    with st.expander(
+        f"{label} · {selection_label}",
+        expanded=st.session_state.get("filter_open_section") == state_key,
+    ):
         all_col, clear_col = st.columns(2)
         with all_col:
             st.button(
@@ -461,7 +466,7 @@ def sidebar_filters(clean_df, token):
     if st.session_state.get("filter_source") != token:
         for key in [
             "filter_counties", "filter_roles", "filter_languages",
-            "filter_dates_enabled", "filter_dates",
+            "filter_dates_enabled", "filter_dates", "filter_open_section",
         ]:
             st.session_state.pop(key, None)
         # A different dataset must never inherit an old PDF or action plan.
