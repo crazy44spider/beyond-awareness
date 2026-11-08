@@ -114,18 +114,21 @@ def render_overview(clean_df: pd.DataFrame, summary: dict, source_label: str) ->
         label for label, stats in knowledge.items()
         if stats["n"] and stats["mean_change"] is not None and stats["mean_change"] > 0
     ]
-    if higher:
-        takeaway(
-            "Participants generally rated their knowledge higher after training.",
-            "This is a retrospective self-report, not proof the training caused the change.",
-            label="WHAT THE SURVEY SUGGESTS",
-        )
+    measured = sum(1 for stats in knowledge.values() if stats["n"])
+    if measured and len(higher) == measured:
+        headline = "All measured topics had higher current self-ratings."
+    elif higher:
+        headline = "Some knowledge topics had higher current self-ratings."
+    elif measured:
+        headline = "No measured topic showed a higher average self-rating."
     else:
-        takeaway(
-            "Knowledge outcomes need a closer look.",
-            "Not enough paired ratings are available to summarize higher knowledge.",
-            label="WHAT THE SURVEY SUGGESTS",
-        )
+        headline = "Paired knowledge ratings are unavailable."
+    takeaway(
+        headline,
+        "These are retrospective participant ratings, not proof "
+        "that the training caused a change.",
+        label="WHAT THE SURVEY SUGGESTS",
+    )
 
     st.markdown("### Explore the story")
     st.caption("Each section answers a different question.")
@@ -222,9 +225,9 @@ def render_training_outcomes(clean_df: pd.DataFrame, summary: dict) -> None:
                 if float(item["after_mean"]) > float(item["before_mean"])]
     if improved:
         takeaway(
-            "Current self-ratings are higher in the displayed topics.",
-            f"Higher averages in {len(improved)} of {len(usable)} knowledge areas. "
-            "The same participant must have answered both ratings to enter each comparison.",
+            f"Higher current ratings in {len(improved)} of {len(usable)} topics.",
+            "Only matched recalled-before and current ratings enter each comparison. "
+            "An observed difference is not evidence of a causal effect.",
             label="HOW TO READ IT",
         )
     else:
