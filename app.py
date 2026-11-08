@@ -289,7 +289,7 @@ def select_source():
     with st.popover("Data source", use_container_width=True):
         mode = st.radio(
             "Choose survey data",
-            ["Real survey", "Synthetic test data"],
+            ["Synthetic test data", "Real survey"],
             key="source_mode_v2",
         )
         if mode == "Real survey":
@@ -651,6 +651,13 @@ def main():
     summary = build_summary(filtered, min_group_n=min_n)
 
     if source_label.startswith("Synthetic"):
+        st.info(
+            "**Start here: fictional demo data.** This dashboard uses synthetic responses. "
+            "To analyze the actual EveryMind survey, open **Data source** above, "
+            "select **Real survey**, and choose **Upload or replace the survey** "
+            "to upload the provided Excel workbook. The app will automatically "
+            "clean the responses and update the analysis, recommendations, and reports."
+        )
         st.warning("TEST DATA — these results are fictional, not EveryMind survey evidence.")
 
     if page == "Overview":
