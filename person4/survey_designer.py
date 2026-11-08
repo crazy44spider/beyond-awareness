@@ -246,6 +246,27 @@ finding_rules.update({
 })
 
 
+# New, explicitly hypothesis-generating adapters. These rules suggest what
+# to ask next, not what caused a knowledge/willingness difference.
+finding_rules.update({
+    "knowledge_willingness_gap": ["COM01", "TRU02", "PSY02"],
+    "feedback_privacy_questions": ["TRU01"],
+    "feedback_crisis_questions": ["PSY01"],
+    "feedback_call_experience_questions": ["TRU02"],
+    "feedback_local_relevance_questions": ["CUL02"],
+})
+# A lack of questions is evidence about the FORM, not evidence about people.
+for _dimension, _ids in {
+    "Cultural & Linguistic": ["CUL01", "CUL02"],
+    "Socioeconomic & Practical": ["PRA01", "PRA02"],
+    "Communication": ["COM01", "COM02"],
+    "Institutional Trust": ["TRU01", "TRU02"],
+    "Psychological": ["PSY01", "PSY02"],
+}.items():
+    for _id in _ids:
+        finding_rules[f"questionnaire_missing_{_id.lower()}"] = [_id]
+
+
 # ============================================================
 # PART 4B: RECOGNIZE SURVEY COLUMNS
 # ============================================================
@@ -900,59 +921,104 @@ def recommend_questions(findings):
 # ============================================================
 
 def analyze_survey(df, external_findings=None):
+    """Use Person 4's original detection/recommendation rules on the new file.
+
+    Coverage is re-audited from questionnaire columns every time. Existing
+    core survey measures must remain available; supplemental question columns
+    may be added freely. Person 2 and 3 findings can be passed in via the
+    original external_findings contract.
     """
-    THIS IS THE MAIN FUNCTION OTHER TEAMMATES WILL CALL.
-
-    Input: a DataFrame from an uploaded Excel file.
-
-    Output:
-      - summary statistics
-      - coverage audit
-      - detected findings
-      - recommended questions
-      - full question bank
-    """
-
     data = standardize_survey(df)
+    coverage = coverage_audit(data)
+    recognized = identify_direct_questions(data)
 
     automatic_findings, summary = detect_findings(data)
 
-    # Store findings by type to avoid duplicates.
+    # The original detector assumes the base survey asks only about calls.
+    # Do not repeat that claim once a new text/chat preference item exists.
+    if recognized["by_id"]["COM01"]:
+        automatic_findings = [
+            finding for finding in automatic_findings
+            if finding["type"] != "call_only_measure"
+        ]
+
+    # Missing questionnaire topics are real design gaps, not participant
+    # outcomes. They are low-priority fallbacks behind observed signals.
+    for _, dimension in coverage.iterrows():
+        for question_id in dimension["unmeasured_question_ids"]:
+            if question_id == "COM01" and recognized["by_id"]["COM01"]:
+                continue
+            automatic_findings.append(make_finding(
+                finding_type=f"questionnaire_missing_{question_id.lower()}",
+                title=f"Current survey does not directly ask {question_id}",
+                description=(
+                    f"Question {question_id} could help measure "
+                    f"{dimension['dimension']}. This is a questionnaire "
+                    "coverage gap, not a demonstrated respondent barrier."
+                ),
+                source="questionnaire_coverage",
+                limitations=[
+                    "No participant-level barrier can be inferred from a missing question.",
+                    "The questionnaire matching rules require staff review.",
+                ],
+                evidence={
+                    "dimension": dimension["dimension"],
+                    "question_id": question_id,
+                    "status": dimension["coverage"],
+                },
+            ))
+
     findings_by_type = {
-        finding["type"]: finding
-        for finding in automatic_findings
+        finding["type"]: finding for finding in automatic_findings
     }
-
-    # Add findings from Persons 2 and 3, if available.
-    #
-    # If the same type appears, use the team's result
-    # instead of our basic automated result.
-
-    team_findings = prepare_external_findings(
-        external_findings
-    )
-
+    team_findings = prepare_external_findings(external_findings)
     for finding in team_findings:
         findings_by_type[finding["type"]] = finding
+    combined_findings = list(findings_by_type.values())
 
-    combined_findings = list(
-        findings_by_type.values()
-    )
+    # Preserve the original rule mapping; layer on a transparent priority and
+    # remove suggestions that the revised questionnaire already includes.
+    recommendations = recommend_questions(combined_findings)
+    already_asked = {
+        qid for qid, headers in recognized["by_id"].items() if headers
+    }
+    if not recommendations.empty:
+        recommendations = recommendations[
+            ~recommendations["question_id"].isin(already_asked)
+        ].copy()
 
-    recommendations = recommend_questions(
-        combined_findings
-    )
+        source_weight = {
+            "person2_gap_detector": 100,
+            "person3_feedback_themes": 90,
+            "keyword_screening": 60,
+            "accessibility_audit": 45,
+            "questionnaire_coverage": 15,
+        }
+        recommendations["priority"] = recommendations["evidence_sources"].map(
+            lambda sources: (
+                max((source_weight.get(name, 10) for name in sources), default=0)
+                + 2 * max(0, len(sources) - 1)
+            )
+        )
+        recommendations = recommendations.sort_values(
+            ["priority", "question_id"],
+            ascending=[False, True],
+            kind="stable",
+        ).reset_index(drop=True)
 
     return {
         "summary": summary,
-
-        "coverage": coverage_audit(data),
-
+        "coverage": coverage,
         "findings": combined_findings,
-
         "recommendations": recommendations,
-
-        "question_bank": pd.DataFrame(question_bank)
+        "question_bank": pd.DataFrame(question_bank),
+        "recognized_question_ids": sorted(already_asked),
+        "supplemental_question_columns": recognized["supplemental_columns"],
+        "unclassified_question_columns": [
+            header for header in recognized["supplemental_columns"]
+            if header not in recognized["recognized_columns"]
+        ],
+        "team_findings_count": len(team_findings),
     }
 
 
