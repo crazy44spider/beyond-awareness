@@ -146,7 +146,7 @@ button:focus-visible, [role="radio"]:focus-visible,
 .ba-hero .ba-heading{color:#FFFFFF !important;font-size:clamp(2.0rem,3.9vw,3.35rem);}
 .ba-hero .ba-subhead{color:#D7E8DA;margin-bottom:0;max-width:610px;}
 .ba-hero>*{position:relative;z-index:1;}
-.ba-kpi-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:9px 0 25px;}
+.ba-kpi-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:9px 0 25px;}
 .ba-kpi{border:1px solid var(--line);border-radius:14px;background:white;padding:17px 18px;min-width:0;}
 .ba-kpi .label{font-size:.77rem;color:var(--muted);font-weight:680;letter-spacing:.02em;}
 .ba-kpi .value{font-family:Georgia,serif;color:var(--forest);font-size:1.8rem;
