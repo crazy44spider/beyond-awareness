@@ -102,8 +102,8 @@ def render_overview(summary):
 
     intro(
         "THE TRAINING STORY · AT A GLANCE",
-        "A clearer picture of 988 training",
-        "What participants reported learning, where our information stops, and what to explore next.",
+        "What the training tells us",
+        "What participants learned—and what to improve.",
     )
 
     stat_cards([
@@ -112,21 +112,21 @@ def render_overview(summary):
             "tone": "lilac",
             "label": "Survey responses",
             "value": f"{n:,}",
-            "detail": "Survey rows, not necessarily unique people",
+            "detail": "Survey responses",
         },
         {
             "icon": "🌱",
             "tone": "mint",
-            "label": "Knowledge topics with higher ratings",
+            "label": "Knowledge ratings improved",
             "value": f"{positive} of {assessed}" if assessed else "Not available",
-            "detail": "Current versus recalled-before responses",
+            "detail": "Across three topics",
         },
         {
             "icon": "💬",
             "tone": "peach",
-            "label": "Answered the call-intent question",
+            "label": "Answered the call question",
             "value": percent(response_rate),
-            "detail": f"{missing:,} missing or invalid responses",
+            "detail": f"{missing:,} unanswered or invalid",
         },
     ])
 
@@ -134,8 +134,8 @@ def render_overview(summary):
     chart_col, story_col = st.columns([1.6, 1], gap="large")
 
     with chart_col:
-        st.subheader("What participants say they know")
-        st.caption("Self-rated knowledge, recalled before and rated currently · 1–5 scale")
+        st.subheader("Reported knowledge")
+        st.caption("Before vs. after · self-reported")
         records = list(knowledge.items())
         if records and any(item["n"] > 0 for _, item in records):
             fig = go.Figure()
@@ -163,8 +163,8 @@ def render_overview(summary):
 
     with story_col:
         focus_card(
-            "ONE IMPORTANT BLIND SPOT",
-            "Knowing isn't the same as reaching out",
+            "WHAT'S MISSING",
+            "Would people actually reach out?",
             "The survey asks whether people would CALL 988. "
             "It doesn't ask whether they would rather text or chat, "
             "or how comfortable they feel asking for help."
@@ -174,7 +174,7 @@ def render_overview(summary):
             "We cannot interpret blank answers as unwillingness."
         )
 
-    with st.expander("How were these insights calculated?"):
+    with st.expander("See the numbers"):
         st.write(
             "Each knowledge comparison uses only responses with both a recalled-before "
             "and a current rating. A higher average rating is descriptive; it does not "
@@ -197,7 +197,7 @@ def render_overview(summary):
             "Missing answers and unusable values are not treated as unwillingness."
         )
 
-    with st.expander("Original dashboard indicators · full metrics"):
+    with st.expander("More metrics"):
         # Preserve all six indicators from the previous Overview, now optional.
         extra = st.columns(3)
         for col, label, value in zip(
@@ -376,7 +376,7 @@ def render_dashboard(clean_df, summary):
 
     # All original views remain available, but are no longer crowded onto
     # the first screen. This is a display change only; no feature was deleted.
-    with st.expander("Explore detailed analysis · all original charts and tables", expanded=False):
+    with st.expander("Explore detailed charts", expanded=False):
         tabs = st.tabs([
             "Knowledge",
             "Training experience",
