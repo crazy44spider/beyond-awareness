@@ -284,6 +284,13 @@ section[data-testid="stSidebar"],
     outline:2px solid #A7DEA9 !important;
     outline-offset:2px !important;
 }
+
+.ba-nav-separator {
+    height:1px;
+    background:#34483B;
+    margin:9px 9px 8px;
+}
+
 /* ── Always-visible, compact data controls above page content ── */
 .ba-data-toolbar-label {
     color:#6D8073;
