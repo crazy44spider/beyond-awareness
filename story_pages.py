@@ -105,9 +105,8 @@ def render_overview(clean_df: pd.DataFrame, summary: dict, source_label: str) ->
     )
 
     kpis([
-        ("Survey responses", f"{n:,}", "Current selection"),
-        ("Answered willingness-to-call", f"{answered:,}", f"{_pct(rate)} of responses"),
-        ("Unanswered call question", f"{missing:,}", "Not a measure of unwillingness"),
+        ("Responses included", f"{n:,}", "Current survey selection"),
+        ("Answered the call question", _pct(rate), f"{answered:,} answered; {missing:,} missing or invalid"),
     ])
 
     knowledge = summary["knowledge"]["topics"]
