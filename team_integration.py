@@ -22,7 +22,11 @@ from person2.gap_detector import (
     willingness_summary,
 )
 from person4.survey_designer import analyze_survey
-from intervention_planner import build_action_plan, recommend_interventions
+from intervention_planner import (
+    DIMENSION_NAMES, build_action_plan, get_dimension_info,
+    get_intervention, recommend_interventions,
+)
+from ui_styles import intro, stat_cards, focus_card
 from report_generator import generate_report
 
 
@@ -81,9 +85,12 @@ def build_action_findings(clean_df: pd.DataFrame) -> list[dict]:
 
 
 def render_gap_detector(clean_df: pd.DataFrame) -> None:
-    """Show Person 2's actual quantitative calculations."""
-    st.header("Gap Detector")
-    st.caption("Descriptive comparisons: recalled-before versus current ratings, and willingness to call.")
+    """Plain-English first; all original stats remain under 'Detailed evidence'."""
+    intro(
+        "WHAT PEOPLE KNOW · WHAT WE CAN MEASURE",
+        "Understanding is only part of the story",
+        "Explore what people reported learning, and where we're still missing answers.",
+    )
     if clean_df.empty:
         st.info("No survey responses match these filters.")
         return
@@ -91,46 +98,115 @@ def render_gap_detector(clean_df: pd.DataFrame) -> None:
     knowledge = knowledge_summary(clean_df)
     willingness = willingness_summary(clean_df)
     comparison = knowledge_vs_willingness(clean_df)
+    answered = willingness["answered"]
+    rate = willingness["response_rate"]
 
-    a, b, c = st.columns(3)
-    a.metric("Respondents in selection", f"{len(clean_df):,}")
-    b.metric("Answered call-intent item", f"{willingness['answered']:,}")
-    c.metric("Call-intent response rate", f"{willingness['response_rate']:.1f}%")
+    stat_cards([
+        {
+            "tone": "lilac", "icon": "💜",
+            "label": "Responses included",
+            "value": f"{len(clean_df):,}",
+            "detail": "Current filters",
+        },
+        {
+            "tone": "mint", "icon": "📚",
+            "label": "Answered the call question",
+            "value": f"{answered:,}",
+            "detail": "Missing does not mean unwilling",
+        },
+        {
+            "tone": "peach", "icon": "💬",
+            "label": "Call question response rate",
+            "value": f"{rate:.1f}%" if pd.notna(rate) else "N/A",
+            "detail": "Only the calling route was asked about",
+        },
+    ])
 
-    st.subheader("Recalled-before vs current knowledge")
-    st.dataframe(
-        knowledge[[
-            "label", "paired_n", "recalled_before_mean",
-            "current_mean", "mean_difference", "percent_increased"
-        ]].rename(columns={
-            "label": "Knowledge measure",
-            "paired_n": "Paired responses",
-            "recalled_before_mean": "Recalled-before mean",
-            "current_mean": "Current mean",
-            "mean_difference": "Mean difference",
-            "percent_increased": "Reported increase (%)",
-        }),
-        use_container_width=True,
-        hide_index=True,
-    )
-    st.caption("All scores are self-reported and retrospective; differences are not causal training effects.")
-
-    st.subheader("Knowledge compared with willingness")
-    st.write(
-        f"{comparison['complete_case_n']:,} complete cases had both items. "
-        f"{comparison['gap_count']:,} rated their knowledge of when to use 988 at 4–5 "
-        "while rating willingness to call at 0–5."
-    )
+    st.write("")
+    st.subheader("Where participants report learning")
     st.caption(
-        "Missing willingness answers are excluded. The pattern cannot identify "
-        "the reason for lower willingness or measure preference for text/chat."
+        "The share whose current rating was higher than their recalled-before rating."
     )
+    for _, item in knowledge.iterrows():
+        label = str(item["label"])
+        paired = int(item["paired_n"])
+        value = item["percent_increased"]
+        if paired == 0 or pd.isna(value):
+            st.write(f"**{label}** · No matched answers")
+            continue
+        pct = max(0.0, min(100.0, float(value)))
+        col_label, col_pct = st.columns([4, 1])
+        with col_label:
+            st.markdown(f"**{label}**")
+        with col_pct:
+            st.markdown(f"**{pct:.0f}%**")
+        st.progress(pct / 100)
+        st.caption(f"Among {paired:,} paired survey responses")
+
+    n = int(comparison["complete_case_n"])
+    if n:
+        count = int(comparison["gap_count"])
+        focus_card(
+            "AN AWARENESS–ACTION QUESTION",
+            "Some people know when to use 988, but rate calling lower",
+            f"{count} of {n} people who answered both items rated their knowledge "
+            "of when to use 988 at 4–5 but willingness to call at 0–5. "
+            "This is a descriptive pattern, not an explanation of why.",
+        )
+    else:
+        st.info("Not enough paired knowledge and willingness answers for a comparison.")
+
+    with st.expander("Detailed evidence · scores, counts, correlation and methodology"):
+        st.subheader("Matched knowledge comparisons")
+        st.dataframe(
+            knowledge[[
+                "label", "paired_n", "recalled_before_mean",
+                "current_mean", "mean_difference", "percent_increased",
+            ]].rename(columns={
+                "label": "Knowledge measure",
+                "paired_n": "Paired responses",
+                "recalled_before_mean": "Recalled-before mean",
+                "current_mean": "Current mean",
+                "mean_difference": "Mean difference",
+                "percent_increased": "Reported increase (%)",
+            }),
+            hide_index=True,
+            width="stretch",
+        )
+        st.subheader("Knowledge and willingness")
+        st.write(
+            f"{n:,} complete cases; {comparison['gap_count']:,} matched the "
+            "high-knowledge/lower-willingness definition."
+        )
+        st.markdown("**Cross-tabulation (knowledge 1–5 × willingness 0–10)**")
+        st.dataframe(comparison["heatmap"], width="stretch")
+        st.markdown("**Call-intent distribution (0–10)**")
+        st.dataframe(
+            pd.DataFrame(
+                list(willingness["score_distribution"].items()),
+                columns=["Willingness score", "Count"],
+            ),
+            hide_index=True,
+            width="stretch",
+        )
+        corr = comparison["spearman_correlation"]
+        if pd.notna(corr):
+            st.caption(f"Spearman correlation: {float(corr):.2f} (descriptive, complete cases only).")
+        st.caption(
+            "Recalled-before scores were collected after training. Scores are ordinal "
+            "self-reports; gaps and correlations are not causal effects. Missing "
+            "call-intent answers may be nonrandom, and this survey does not ask "
+            "whether people prefer text or chat."
+        )
 
 
 def render_action_lab(clean_df: pd.DataFrame) -> None:
-    """Recommend Person 5's interventions using current, aggregate-only findings."""
-    st.header("Action Lab")
-    st.caption("Choose possible training improvements informed by the currently selected survey data.")
+    """Preserve the planner while exposing its richer comparison/lens tools."""
+    intro(
+        "FROM FINDINGS TO THE NEXT TRAINING",
+        "Small changes, meaningful next steps",
+        "Explore candidate improvements, compare options, and build a practical action plan.",
+    )
     if clean_df.empty:
         st.info("No survey responses match these filters.")
         return
@@ -138,48 +214,159 @@ def render_action_lab(clean_df: pd.DataFrame) -> None:
     findings = build_action_findings(clean_df)
     result = recommend_interventions(findings)
     recs = result["recommendations"]
-
-    st.subheader("Evidence passed to the planner")
-    for finding in findings:
-        with st.expander(finding["title"]):
-            st.write(finding["description"])
-            for note in finding["limitations"]:
-                st.caption(note)
-
-    if not recs:
-        st.info("No intervention rule matched the current findings.")
-        st.session_state["chosen_actions"] = []
-        return
-
-    st.subheader("Suggested improvements")
     by_id = {item["id"]: item for item in recs}
-    for item in recs:
-        with st.expander(item["title"]):
-            st.write(item["summary"])
-            st.caption(f"Effort: {item.get('effort', 'Not estimated')} (planning estimate only)")
-            if item.get("triggered_by"):
-                st.write("Triggered by: " + "; ".join(t["title"] for t in item["triggered_by"]))
 
-    prior = [k for k in st.session_state.get("chosen_actions", []) if k in by_id]
-    selected = st.multiselect(
-        "Select improvements to include in the PDF report",
-        options=list(by_id),
-        default=prior,
-        format_func=lambda key: by_id[key]["title"],
-    )
-    st.session_state["chosen_actions"] = selected
+    stat_cards([
+        {
+            "tone": "lilac", "icon": "💡", "label": "Evidence signals",
+            "value": str(len(findings)), "detail": "Descriptive, not causal",
+        },
+        {
+            "tone": "mint", "icon": "🌱", "label": "Suggested improvements",
+            "value": str(len(recs)), "detail": "Ideas for EveryMind review",
+        },
+    ])
 
-    if selected:
-        st.subheader("Draft action plan")
-        for action in build_action_plan(findings, selected):
-            with st.expander(action["title"]):
-                st.write("**Proposed change:** " + action["proposed_change"])
-                st.write("**Future measurement:** " + action["future_measurement"])
-                st.write("**Suggested owner:** " + action["owner"])
-                st.write("**Decision rule:** " + action["decision_rule"])
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "Explore improvements", "Compare actions",
+        "Inclusive action lens", "Your action plan",
+    ])
+
+    with tab1:
+        st.subheader("Recommended changes")
+        st.caption(
+            "These proposals depend on the current survey selection. "
+            "Effort levels are planning estimates, not predicted outcomes."
+        )
+        if not recs:
+            st.info("No matching recommendations for this selection.")
+            st.session_state["chosen_actions"] = []
+        else:
+            for item in recs:
+                with st.expander("✨  " + item["title"]):
+                    st.write(item["summary"])
+                    st.markdown(f"**Why:** {item['why']}")
+                    st.caption(f"Effort: {item.get('effort', 'Not estimated')}")
+                    if item.get("triggered_by"):
+                        st.write(
+                            "Evidence: " + "; ".join(
+                                t["title"] for t in item["triggered_by"]
+                            )
+                        )
+                    st.markdown("**How to try it**")
+                    for step in item["steps"]:
+                        st.write("- " + step)
+                    st.write("**Measure:** " + item["metric"])
+            prior = [
+                item for item in st.session_state.get("chosen_actions", [])
+                if item in by_id
+            ]
+            selected = st.multiselect(
+                "Add improvements to your action plan",
+                options=list(by_id),
+                default=prior,
+                format_func=lambda key: by_id[key]["title"],
+            )
+            st.session_state["chosen_actions"] = selected
+
+        with st.expander("What evidence triggered these suggestions?"):
+            for finding in findings:
+                st.markdown("**" + finding["title"] + "**")
+                st.write(finding["description"])
+                for note in finding["limitations"]:
+                    st.caption(note)
+            if not findings:
+                st.caption("No findings available for this selection.")
+
+    with tab2:
+        st.subheader("Compare your options")
+        st.caption(
+            "Compare up to three recommended actions. 'Effort' is an estimate, not a score of likely success."
+        )
+        if not recs:
+            st.info("Recommendations will appear here when the current selection produces findings.")
+        else:
+            compare = st.multiselect(
+                "Compare actions (up to three)",
+                options=list(by_id),
+                default=list(by_id)[:2],
+                format_func=lambda key: by_id[key]["title"],
+                key="compare_action_ids",
+            )
+            if len(compare) > 3:
+                st.warning("Showing the first three selections.")
+                compare = compare[:3]
+            if compare:
+                fields = [
+                    ("Intended outcome", "outcome"),
+                    ("Implementation steps", "steps"),
+                    ("Estimated effort", "effort"),
+                    ("How to measure", "metric"),
+                    ("What could change this choice", "change_mind"),
+                ]
+                table = {}
+                for key in compare:
+                    item = by_id[key]
+                    table[item["title"]] = [
+                        "\n".join(item.get(field, []))
+                        if isinstance(item.get(field), list)
+                        else str(item.get(field, "Not available"))
+                        for _, field in fields
+                    ]
+                st.table(
+                    pd.DataFrame(
+                        table,
+                        index=[name for name, _ in fields],
+                    )
+                )
+
+    with tab3:
+        st.subheader("Inclusive action lens")
+        st.caption(
+            "Consider unmeasured barriers without assuming they exist in any particular community."
+        )
+        dimension = st.selectbox(
+            "Which dimension would you like to consider?",
+            DIMENSION_NAMES,
+            key="integrated_inclusive_dimension",
+        )
+        info = get_dimension_info(dimension)
+        if info:
+            st.markdown("**What this survey actually establishes**")
+            st.write(info["established"])
+            st.markdown("**What we don't yet know**")
+            st.write(info["unknown"])
+            with st.expander("Ideas to try and how to measure them", expanded=True):
+                st.markdown("**Possible design changes**")
+                for idea in info["design_choices"]:
+                    st.write("- " + idea)
+                st.markdown("**Optional questions for future surveys**")
+                for question in info["future_questions"]:
+                    st.write("- " + question)
+                st.caption(info["interpretation"])
+
+    with tab4:
+        st.subheader("Your draft action plan")
+        selected = st.session_state.get("chosen_actions", [])
+        if not selected:
+            st.info("Choose at least one improvement on the first tab to build a plan.")
+        else:
+            for action in build_action_plan(findings, selected):
+                with st.expander(action["title"], expanded=True):
+                    st.write("**Proposed change:** " + action["proposed_change"])
+                    st.write("**Suggested owner:** " + action["owner"])
+                    st.write("**Future measurement:** " + action["future_measurement"])
+                    st.write("**Decision rule:** " + action["decision_rule"])
+                    st.write("**Check-in:** " + action["checkin"])
+                    st.markdown("**Implementation steps**")
+                    for step in action["steps"]:
+                        st.write("- " + step)
+            st.success("Your selected actions can be exported from the Reports page.")
+
     st.caption(
-        "Recommendations are candidates for EveryMind review, not proof of effectiveness. "
-        "Unvalidated keyword mentions do not automatically trigger actions."
+        "Suggested actions are hypotheses to test and refine with EveryMind, "
+        "not evidence of proven impact. Unvalidated comment keyword matches "
+        "are not presented as confirmed participant concerns."
     )
 
 
