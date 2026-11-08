@@ -1,26 +1,3 @@
-"""Beyond Awareness app. Start with: python -m streamlit run app.py
-
-Keep app.py, dashboard.py, cleaning.py, and pipeline.py together.
-Install: python -m pip install pandas openpyxl streamlit plotly pytest
-
-Optional teammate contracts (pure functions, no Streamlit side effects):
-    gap_detector.analyze_gaps(clean_df) -> {"findings": [finding, ...]}
-    qualitative.analyze_feedback(clean_df) -> {"findings": [finding, ...]}
-    accessibility.audit_survey(clean_df) -> {"findings": [finding, ...]}
-    interventions.recommend_interventions(findings) -> {"findings": [finding, ...]}
-    report_generator.generate_report(metrics=..., findings=..., selections=...) -> PDF bytes
-
-finding fields: id, source, type, title, description, count, denominator,
-percentage (0-100 or None), limitations (list[str]), evidence (dict).
-Only validated aggregate findings should enter this contract. No respondent
-quotes, names, or identifying evidence. Adapt MODULES when teammates choose
-different names. Missing modules show 'Feature in progress'; broken modules
-show an explicit error without exposing their exception contents or raw data.
-
-Real workbooks are kept only in the session, never in a global data cache or
-written to disk. Use real data only in an approved local/private environment.
-"""
-
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone

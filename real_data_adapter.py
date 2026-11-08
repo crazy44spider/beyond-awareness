@@ -1,26 +1,3 @@
-"""
-real_data_adapter.py  (Person 5)
-================================
-Reads the REAL survey CSV and produces:
-    findings : list of finding dicts (same fields as sample_findings.py)
-    metrics  : dict for report_generator.generate_report
-    summary  : small dict of aggregate counts (for display only)
-
-Main function:
-    findings, metrics, summary = load_and_build("path/to/survey.csv")
-    (the path can also be an uploaded file object, e.g. from Streamlit)
-
-IMPORTANT - what this file does and does NOT do:
-  * It only makes DESCRIPTIVE findings (counts, coverage, small groups, survey design gaps).
-  * It does NOT decide knowledge/call-intent gaps or comment themes. Those come from
-    Person 2 (gap detector) and Person 3 (feedback analyzer). Their findings can be added later.
-  * It never copies open-ended comments or any row-level data into its output.
-  * Missing values stay None (never turned into 0).
-  * The CSV itself must NEVER be committed to GitHub. This file only reads it.
-
-No streamlit import here, so any module can use it.
-"""
-
 import io
 import re
 

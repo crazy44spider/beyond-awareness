@@ -1,13 +1,3 @@
-"""
-test_person5.py  (Person 5)
-===========================
-Tests for matching, empty/partial data, no invented evidence, and valid PDF output.
-
-Run with either:
-    python test_person5.py
-    pytest test_person5.py
-"""
-
 import io
 import subprocess
 import sys

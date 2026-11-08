@@ -1,13 +1,3 @@
-"""
-Participant feedback coding (EveryMind 988 survey).
-
-Reads the survey Excel file, cleans it, translates Spanish comments, redacts
-names, and tags both open-ended questions into themes (multi-label keyword
-coding). Run `python feedback_coding.py` to print the summaries.
-Importing this file does not print anything.
-
-Do NOT commit the data/ folder (raw participant comments).
-"""
 import re
 from string import capwords
 

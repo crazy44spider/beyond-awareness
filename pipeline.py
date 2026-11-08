@@ -1,14 +1,3 @@
-"""Shared survey metrics for Beyond Awareness.
-
-Keep this file next to cleaning.py. Run:
-    python pipeline.py "survey_data(1).xlsx"
-    python pipeline.py "survey_data(1).xlsx" --export metrics_summary.json
-
-Exports contain aggregates, never respondent rows, IDs, or open-text answers.
-Aggregates still require approval before public sharing, especially small groups.
-All shares/rates are fractions from 0 to 1; undefined results are None.
-"""
-
 from __future__ import annotations
 
 import argparse

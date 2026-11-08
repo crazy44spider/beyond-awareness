@@ -1,20 +1,3 @@
-"""
-sample_findings.py  (Person 5)
-==============================
-FAKE (synthetic) findings and metrics used to build and demo the Action Lab
-before the real analysis from the other teammates is ready.
-
-IMPORTANT:
-  * Everything in this file is FICTIONAL. None of it is an EveryMind result.
-  * Every finding has status = "synthetic" so the app and the PDF can
-    show the "SYNTHETIC DEMONSTRATION" warning automatically.
-  * When real results are ready, build findings with the SAME fields
-    (see FINDING_FIELDS below) and pass them to the same functions.
-    Missing values should be None (NOT zero).
-
-This file does NOT import streamlit, so any module can import it.
-"""
-
 # The standard fields every finding should have (the "shared interface").
 FINDING_FIELDS = [
     "id",           # unique text id, e.g. "gap_001"

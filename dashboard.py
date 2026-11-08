@@ -1,9 +1,3 @@
-"""Streamlit views for cleaned Beyond Awareness survey data.
-
-Called by app.py; all views use one filtered dataframe and its build_summary().
-No raw rows or free-text responses are displayed. Plotly is the chart library.
-"""
-
 from __future__ import annotations
 
 import pandas as pd

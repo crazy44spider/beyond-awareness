@@ -1,23 +1,3 @@
-"""
-person5_demo.py  (Person 5)
-===========================
-Standalone Streamlit "Action Lab".
-
-Run it with:
-    streamlit run person5_demo.py
-
-What it does:
-    1. Pick a finding (synthetic demo findings by default, or upload your own JSON).
-    2. See recommendation cards (max 3 first; "Explore more" shows the rest).
-    3. Tick checkboxes to select actions.
-    4. Compare up to 3 actions side by side.
-    5. Use the Inclusive Action Lens (five accessibility dimensions).
-    6. Preview the action plan and download the PDF.
-
-It only uses: intervention_planner.py, report_generator.py, sample_findings.py.
-It does NOT edit or need the shared app.py.
-"""
-
 import json
 
 import pandas as pd

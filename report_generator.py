@@ -1,22 +1,3 @@
-"""
-report_generator.py  (Person 5)
-===============================
-Builds the "Improvement Brief" PDF and returns it as BYTES.
-
-Main function (no streamlit needed):
-    generate_report(metrics, findings, selected_interventions) -> bytes
-
-    metrics                  dict of numbers (ALL keys optional; missing -> "Not available").
-                             See sample_findings.SYNTHETIC_METRICS for every key.
-    findings                 list of finding dicts (same fields as sample_findings.FINDING_FIELDS)
-    selected_interventions   list of intervention ids (strings) OR dicts that have an "id" key
-
-Rules: no row-level comments in the PDF by default, no causal claims,
-no invented numbers, and a big SYNTHETIC banner whenever demo data is used.
-
-Requires:  pip install reportlab
-"""
-
 import datetime
 from io import BytesIO
 from xml.sax.saxutils import escape

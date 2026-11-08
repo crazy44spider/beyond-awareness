@@ -1,21 +1,3 @@
-"""
-intervention_planner.py  (Person 5)
-===================================
-Turns FINDINGS (from the gap detector, feedback analyzer, accessibility audit)
-into candidate training IMPROVEMENTS ("interventions").
-
-Three functions other modules can call (NO streamlit needed):
-    recommend_interventions(findings)           -> dict of recommendations
-    build_action_plan(findings, selected_ids)   -> list of plan rows (one per chosen action)
-    (generate_report lives in report_generator.py)
-
-Rules we follow (so we never overclaim):
-  * Missing values stay missing (None). We never turn them into zero.
-  * We never invent numbers, subgroups, "impact scores" or claims about 988 confidentiality.
-  * "Effort" is a planning ESTIMATE only, never a proven impact.
-  * Unknown finding types -> a safe "Needs review" state (no invented advice).
-"""
-
 import copy
 import math
 

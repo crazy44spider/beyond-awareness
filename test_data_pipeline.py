@@ -1,10 +1,3 @@
-"""Synthetic tests; no real workbook, participant data, or network required.
-
-Run: python -m pytest test_data_pipeline.py -q
-UI tests run when streamlit and plotly are installed; otherwise they skip.
-The future team's analytical findings/PDF implementations are not tested here.
-"""
-
 from io import BytesIO
 import json
 from pathlib import Path
