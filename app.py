@@ -42,15 +42,32 @@ from dashboard import render_dashboard, render_quality, style_app
 from person4.survey_designer import analyze_survey, render_survey_designer
 from team_integration import render_gap_detector, render_action_lab, render_pdf_report
 from feedback_analyzer import analyze_feedback
+from story_theme import apply_theme
+from story_pages import (
+    render_overview, render_training_outcomes, render_gap_diagnostic,
+    render_participant_voices as render_story_voices, render_survey_workspace,
+    render_intervention_roadmap, render_reports, render_detailed_analysis,
+)
 
-PAGES = ["Overview", "Gap Detector", "Participant Voices", "Accessibility Audit", "Action Lab", "Report"]
+PAGES = [
+    "Overview",
+    "Training Outcomes",
+    "Gap Detector",
+    "Participant Voices",
+    "Survey Designer",
+    "Intervention Planner",
+    "Reports",
+    "Detailed Analysis",
+]
 NAV_LABELS = {
-    "Overview": "🏠  Overview",
-    "Gap Detector": "📊  Gap Detector",
-    "Participant Voices": "💬  Participant Voices",
-    "Accessibility Audit": "📝  Survey Designer",
-    "Action Lab": "✨  Action Lab",
-    "Report": "📄  Reports",
+    "Overview": "Overview",
+    "Training Outcomes": "Training Outcomes",
+    "Gap Detector": "Gap Detector",
+    "Participant Voices": "Participant Voices",
+    "Survey Designer": "Survey Designer",
+    "Intervention Planner": "Intervention Planner",
+    "Reports": "Reports",
+    "Detailed Analysis": "Detailed Analysis",
 }
 
 MODULES = {
@@ -81,6 +98,18 @@ def make_demo_data(rows=180):
             training_organization=rng.choice(["Agree", "Strongly agree", "Neither agree or disagree"]),
             recommend_training=rng.randint(4, 10),
             willingness_to_call=rng.randint(0, 10) if i % 4 == 0 else "",
+            valuable_feedback=[
+                "I learned when to call 988",
+                "988 is available 24/7",
+                "Anyone can use the support line",
+                "How to help a friend in need",
+            ][i % 4],
+            improvement_feedback=[
+                "Please include more interactive activities",
+                "I would like more examples and practice",
+                "Can you explain confidentiality?",
+                "More videos and visual examples would help",
+            ][i % 4],
         )
         if i % 10 == 0:
             row["participant_type"] += ";Caregiver/parent"
@@ -346,8 +375,12 @@ def sidebar_filters(clean_df, token):
         ]:
             st.session_state.pop(key, None)
         # Don't reuse actions or an exported report from the previous workbook.
-        for key in ["chosen_actions", "generated_pdf_bytes", "generated_pdf_signature"]:
+        for key in ["chosen_actions", "generated_pdf_bytes", "generated_pdf_signature",
+                    "story_extra_actions", "story_survey_selected", "story_filters_token"]:
             st.session_state.pop(key, None)
+        for key in list(st.session_state.keys()):
+            if key.startswith(("story_action_", "voice_theme_", "private_voice_")):
+                st.session_state.pop(key, None)
         st.session_state["filter_source"] = token
         st.session_state["loaded_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
@@ -451,24 +484,33 @@ def render_report(clean_df, summary, selections, source_label):
 
 def main():
     st.set_page_config(
-        page_title="Beyond Awareness",
-        page_icon="💜",
+        page_title="Beyond Awareness | EveryMind",
         layout="wide",
         initial_sidebar_state="expanded",
     )
+    # The original style layer remains intact for legacy views.
     style_app()
+    apply_theme()
+
     st.sidebar.markdown(
-        '<div style="padding:14px 4px 6px;line-height:1.17">'
-        '<span style="font-size:1.9rem" aria-hidden="true">💜</span>'
-        '<div style="color:#FFFFFF;font-size:1.6rem;font-weight:780;letter-spacing:-.04em">'
-        'Beyond<br>Awareness</div>'
-        '</div>',
+        '<div style="margin:6px 0 18px">'
+        '<div style="display:inline-block;border:1px solid #8DBB9B;'
+        'border-radius:9px;padding:7px 9px;color:#F4F7EF;'
+        'font-size:.8rem;font-weight:800;letter-spacing:.10em">B/A</div>'
+        '<div style="font-family:Georgia,serif;color:#FFFDF7;font-size:1.6rem;'
+        'line-height:1.1;margin-top:12px">Beyond<br>Awareness</div>'
+        '<div style="color:#B9D4C0;font-size:.76rem;margin-top:7px">'
+        'EveryMind · 988 training</div></div>',
         unsafe_allow_html=True,
     )
+
     result, source_label, token = select_source()
     filtered, selections, min_n = sidebar_filters(result.clean_df, token)
 
     st.sidebar.divider()
+    st.sidebar.caption("EXPLORE")
+    if st.session_state.get("workspace_page") not in PAGES:
+        st.session_state["workspace_page"] = "Overview"
     page = st.sidebar.radio(
         "Pages",
         PAGES,
@@ -477,36 +519,50 @@ def main():
         key="workspace_page",
     )
 
+    # Re-selecting a subset must not carry a previously generated PDF or action
+    # selection into a different evidence base.
+    current_filter_token = json.dumps(
+        {"source": token, "selections": selections},
+        sort_keys=True, default=str,
+    )
+    if st.session_state.get("story_filters_token") != current_filter_token:
+        for name in ("chosen_actions", "generated_pdf_bytes", "generated_pdf_signature",
+                     "story_extra_actions", "story_survey_selected"):
+            st.session_state.pop(name, None)
+        for name in list(st.session_state.keys()):
+            if name.startswith(("story_action_", "voice_theme_", "private_voice_")):
+                st.session_state.pop(name, None)
+        st.session_state["story_filters_token"] = current_filter_token
+
     summary = build_summary(filtered, min_group_n=min_n)
 
-    st.caption(f"{source_label} · {len(filtered):,} of {len(result.clean_df):,} responses")
+    st.caption(f"{source_label}  ·  {len(filtered):,} responses selected")
     if source_label.startswith("Synthetic"):
-        st.warning("TEST DATA · Not real survey results.")
+        st.warning("TEST DATA — this is not EveryMind survey evidence.")
 
     if page == "Overview":
-        render_dashboard(filtered, summary)
-        render_quality(result.quality)
-    elif page == "Report":
-        render_report(filtered, summary, selections, source_label)
+        render_overview(filtered, summary, source_label)
+    elif page == "Training Outcomes":
+        render_training_outcomes(filtered, summary)
     elif page == "Gap Detector":
-        render_gap_detector(filtered)
-    elif page == "Accessibility Audit":
-        render_survey_designer(analyze_survey(filtered))
-    elif page == "Action Lab":
-        render_action_lab(filtered)
+        render_gap_diagnostic(filtered)
     elif page == "Participant Voices":
-        render_participant_voices(filtered)
-    else:
-        render_team_page(page, filtered)
+        render_story_voices(filtered)
+    elif page == "Survey Designer":
+        render_survey_workspace(filtered)
+    elif page == "Intervention Planner":
+        render_intervention_roadmap(filtered)
+    elif page == "Reports":
+        render_reports(filtered, summary, selections, source_label)
+    elif page == "Detailed Analysis":
+        render_detailed_analysis(filtered, summary, result.quality)
 
-    st.divider()
-    with st.expander("Important interpretation notes"):
-        st.caption(
-            "These are retrospective self-reports, not causal effects. "
-            "County means training affiliation, not participant residence. "
-            "Missing answers do not establish unwillingness. "
-            "Unmeasured barriers must not be presented as observed disparities."
-        )
+    st.markdown(
+        '<p style="font-size:.72rem;color:#728477;margin:34px 0 4px">'
+        'Beyond Awareness · Retrospective participant self-report. '
+        'Patterns are descriptive, not proof of cause or access barriers.</p>',
+        unsafe_allow_html=True,
+    )
 
 
 if __name__ == "__main__":
