@@ -13,18 +13,8 @@ from string import capwords
 
 import pandas as pd
 
-DATA_PATH = "survey_data.xlsx"
 NAMES_TO_REDACT = ["Athena", "Andrea", "Jennifer", "Laura", "Morales", "Sophia"]  # add any others you spot
 
-df = pd.read_excel(DATA_PATH)
-
-df.columns = ["id", "start_time", "completion_time", "language", "role",
-              "date", "county",
-              "post_identify", "post_describe", "post_when",
-              "pre_identify", "pre_describe", "pre_when",
-              "pres_engaged", "pres_knowledge", "pres_organized",
-              "recommend", "likely_call",
-              "learned", "improve"]
 
 # ---------- cleaning functions ----------
 NON_ANSWERS = {"na", "n/a", "none", "no", "nope", "nothing", "nil",
@@ -76,16 +66,6 @@ def redact(text):
         text = re.sub(r"\b" + re.escape(name) + r"\b", "[name]", text, flags=re.IGNORECASE)
     return text
 
-
-# ---------- create the cleaned columns (BEFORE anything uses them) ----------
-df["learned_clean"] = df["learned"].apply(clean_comment)
-df["improve_clean"] = df["improve"].apply(clean_comment)
-df["county_clean"] = df["county"].apply(clean_county)
-df["role_clean"] = df["role"].apply(clean_role)
-
-# explicit "none / nothing / n/a" answers: dropped from commenter counts above,
-# but kept here so "nothing to change" can be reported separately
-df["improve_explicit_none"] = df["improve"].notna() & df["improve_clean"].isna()
 
 translations_learned = {
     34: "I love the information. I think all of us have a moment in our lives when we need support and can't always express it to our family or friends.",
@@ -222,20 +202,12 @@ translations_improve.update({
     500: "Nothing. I liked the presentation and learned a lot.",
 })
 
-df["learned_en"] = df["id"].map(translations_learned).fillna(df["learned_clean"])
-df["improve_en"] = df["id"].map(translations_improve).fillna(df["improve_clean"])
-
 text_fixes = {
     "Fue excelente.": "It was excellent.",
     "Estubo bien.": "It was good.",
     "Informando desde temprana edad.": "Informing people from an early age.",
     "Ayudandonos entre amigos y familias de no caer en malos pasos.": "Helping each other, among friends and families, to avoid going down the wrong path.",
 }
-df["improve_en"] = df["improve_en"].replace(text_fixes)
-
-# Redact names BEFORE tagging or printing anything (previously done at the end)
-df["learned_en"] = df["learned_en"].apply(redact)
-df["improve_en"] = df["improve_en"].apply(redact)
 
 # ---------- themes: what participants found most valuable ----------
 LEARNED_THEMES = {
@@ -377,7 +349,6 @@ def tag_comment(text, themes, improve=False):
     return ["Other"]
 
 
-df["learned_themes"] = df["learned_en"].apply(lambda x: tag_comment(x, LEARNED_THEMES))
 
 # ---------- themes: what participants want improved ----------
 QUIET = {"Positive / nothing to change", "No further questions / nothing to add"}
@@ -598,7 +569,6 @@ add_kw(T, "Reach: more people, students, settings", [
 add_kw(T, "Careers: working at 988 / becoming a counselor", [
     "counselors trained", "counselor training"])
 
-df["improve_themes"] = df["improve_en"].apply(lambda x: tag_comment(x, IMPROVE_THEMES, improve=True))
 
 # Only treat as a question when it has a "?" or opens with a question word
 # ("What I liked was..." is a statement, not a question)
@@ -621,37 +591,73 @@ def comment_type(text, themes):
     return "Suggestion / request"
 
 
-df["improve_type"] = [comment_type(t, th) for t, th in zip(df["improve_en"], df["improve_themes"])]
 
 
-# ---------- reporting (only runs when you execute this file directly) ----------
-def review(text_col, theme_col, themes, n_examples=5):
-    n = df[text_col].notna().sum()
-    counts = df[theme_col].explode().value_counts()
-    print("Commenters:", n)
-    for theme, k in counts.items():
-        print(f"{theme}: {k} ({k / n:.0%} of {n})")
-    for theme in themes:
-        ex = df[df[theme_col].apply(lambda t: theme in t)][text_col]
-        print("\n==", theme, "(", len(ex), ")")
-        for c in ex.sample(min(n_examples, len(ex)), random_state=2):
-            print("  -", c.replace("\n", " "))
+# ---------- reusable analysis (safe to import; no workbook is read) ----------
+def analyze_feedback(clean_df: pd.DataFrame) -> dict:
+    """Tag the currently selected survey responses.
+
+    Expects Person 1's cleaned column names. Returns aggregate theme counts
+    plus redacted, tagged rows for private in-app exploration. No file I/O.
+    """
+    required = {"id", "valuable_feedback", "improvement_feedback"}
+    missing = required - set(clean_df.columns)
+    if missing:
+        raise ValueError("Missing required survey columns: " + ", ".join(sorted(missing)))
+    df = clean_df.copy(deep=True)
+    df["learned"] = df["valuable_feedback"]
+    df["improve"] = df["improvement_feedback"]
+    df["county"] = df.get("county", pd.Series(index=df.index, dtype=object))
+    df["role"] = df.get("participant_type", pd.Series(index=df.index, dtype=object))
+
+    # The original translations are keyed to IDs from the source workbook.
+    # Do not apply them to an unrelated upload that happens to reuse IDs.
+    # Translation lookup is opt-in and should be validated against source text.
+    # ---------- create the cleaned columns (BEFORE anything uses them) ----------
+    df["learned_clean"] = df["learned"].apply(clean_comment)
+    df["improve_clean"] = df["improve"].apply(clean_comment)
+    df["county_clean"] = df["county"].apply(clean_county)
+    df["role_clean"] = df["role"].apply(clean_role)
+    
+    # explicit "none / nothing / n/a" answers: dropped from commenter counts above,
+    # but kept here so "nothing to change" can be reported separately
+    df["improve_explicit_none"] = df["improve"].notna() & df["improve_clean"].isna()
+
+    df["learned_en"] = df["learned_clean"]
+    df["improve_en"] = df["improve_clean"]
+
+    df["improve_en"] = df["improve_en"].replace(text_fixes)
+    
+    # Redact names BEFORE tagging or printing anything (previously done at the end)
+    df["learned_en"] = df["learned_en"].apply(redact)
+    df["improve_en"] = df["improve_en"].apply(redact)
+
+    df["learned_themes"] = df["learned_en"].apply(lambda x: tag_comment(x, LEARNED_THEMES))
+
+    df["improve_themes"] = df["improve_en"].apply(lambda x: tag_comment(x, IMPROVE_THEMES, improve=True))
+
+    df["improve_type"] = [comment_type(t, th) for t, th in zip(df["improve_en"], df["improve_themes"])]
+    return {
+        "data": df,
+        "learned_counts": df["learned_themes"].explode().value_counts(),
+        "improve_counts": df["improve_themes"].explode().value_counts(),
+        "improve_type_counts": df["improve_type"].value_counts(),
+    }
 
 
 if __name__ == "__main__":
-    print("===== WHAT PARTICIPANTS VALUED =====")
-    review("learned_en", "learned_themes", LEARNED_THEMES)
-    print("\n===== WHAT PARTICIPANTS WANT IMPROVED =====")
-    print(df["improve_type"].value_counts())
-    review("improve_en", "improve_themes", IMPROVE_THEMES)
+    from pathlib import Path
+    from cleaning import clean_survey
 
-    print("\n===== CHECKS =====")
-    print("learned:", df["learned_clean"].notna().sum(), "of", len(df))
-    print("improve:", df["improve_clean"].notna().sum(), "of", len(df))
-    print("explicit 'none/nothing' on improve:", int(df["improve_explicit_none"].sum()))
-    print(df["language"].value_counts())
-    print(df["county_clean"].value_counts())
-    print(df["role_clean"].value_counts())
-    dupes = df[df.duplicated(subset=["learned_clean", "improve_clean"], keep=False)
-               & df["learned_clean"].notna()]
-    print("rows sharing identical comments:", len(dupes))
+    workbook = Path(__file__).resolve().parent / "survey_data.xlsx"
+    if not workbook.is_file():
+        raise SystemExit("No local survey_data.xlsx found. Use the dashboard upload instead.")
+    raw = pd.read_excel(workbook)
+    cleaned, _ = clean_survey(raw)
+    result = analyze_feedback(cleaned)
+    print("===== WHAT PARTICIPANTS VALUED =====")
+    print(result["learned_counts"].to_string())
+    print("\n===== WHAT PARTICIPANTS WANT IMPROVED =====")
+    print(result["improve_counts"].to_string())
+    print("\n===== COMMENT TYPES =====")
+    print(result["improve_type_counts"].to_string())
