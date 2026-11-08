@@ -56,18 +56,44 @@ def style_app():
     inject_styles()
 
 
-def _chart(fig, key, *, percent_axis=False, height=330):
+def _chart(fig, key, *, percent_axis=False, height=340, left=68):
+    """Legacy visualizations use the same locked, accessible axes as new pages."""
+    showlegend = (
+        bool(fig.layout.showlegend) if fig.layout.showlegend is not None
+        else sum(bool(t.name) and t.showlegend is not False for t in fig.data) > 1
+    )
     fig.update_layout(
-        template=None, font=dict(family="Segoe UI, Arial, sans-serif", size=13, color="#284333"),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=12, r=12, t=24, b=12),
-        legend=dict(orientation="h", y=1.16, x=0),
-        height=height, hovermode="closest",
-        colorway=["#A17C59", "#287859", "#D5B48D"],
+        template="plotly_white",
+        font=dict(family="Segoe UI, Arial, sans-serif", size=13, color="#284333"),
+        paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF",
+        margin=dict(l=left, r=30, t=62 if showlegend else 26, b=55),
+        legend=dict(orientation="h", y=1.16, x=0,
+                    itemclick=False, itemdoubleclick=False),
+        showlegend=showlegend,
+        height=height,
+        hovermode="closest",
+        dragmode=False,
+        clickmode="none",
+        colorway=[JADE, BARK, "#D5B48D"],
+        hoverlabel=dict(bgcolor="#F7F8F2", font=dict(color="#284333")),
     )
     if percent_axis:
-        fig.update_yaxes(range=[0, 100], title="Share of valid paired responses (%)")
-    st.plotly_chart(fig, width="stretch", theme=None, key=key, config={"displaylogo": False, "displayModeBar": False})
+        fig.update_yaxes(range=[0, 100], title="Share of paired answers (%)")
+    fig.update_xaxes(fixedrange=True, automargin=True, gridcolor="#E5EBE3")
+    fig.update_yaxes(fixedrange=True, automargin=True, gridcolor="#E5EBE3")
+    st.plotly_chart(
+        fig, width="stretch", theme=None, key=key,
+        config={
+            "displaylogo": False,
+            "displayModeBar": False,
+            "scrollZoom": False,
+            "doubleClick": False,
+            "editable": False,
+            "showAxisDragHandles": False,
+            "showAxisRangeEntryBoxes": False,
+            "responsive": True,
+        },
+    )
 
 
 def _bar(records, category, value, *, x_title, color=BARK, horizontal=False):
@@ -234,27 +260,53 @@ def render_overview(summary):
 
 
 def render_knowledge(summary):
+    """Full-width comparisons avoid clipped labels in three narrow cards."""
     st.subheader("Knowledge distributions")
-    st.caption("1 Strongly disagree · 2 Disagree · 3 Neutral · 4 Agree · 5 Strongly agree")
-    columns = st.columns(3)
+    st.caption("Ratings: 1 = strongly disagree · 5 = strongly agree. "
+               "Only respondents answering both versions of each question are counted.")
     for i, (topic, stats) in enumerate(summary["knowledge"]["topics"].items()):
-        with columns[i]:
-            st.markdown(f"**{topic}**")
-            paired = summary["distributions"]["knowledge_paired"][topic]
-            fig = go.Figure()
-            for period, label, color in [("before", "Recalled before", BARK), ("after", "Current", JADE)]:
-                fig.add_bar(name=label, x=[r["value"] for r in paired[period]["values"]],
-                            y=[None if r["share"] is None else r["share"] * 100 for r in paired[period]["values"]], marker_color=color)
-            fig.update_layout(barmode="group")
-            fig.update_xaxes(title="Agreement score", dtick=1)
-            _chart(fig, f"knowledge_{i}", percent_axis=True)
-            st.metric("Paired mean change", number(stats["mean_change"], signed=True))
-            st.caption(f"n={stats['n']} of {stats['denominator_rows']} rows; {stats['missing_pair_rows']} incomplete pairs. {TOPIC_LIMIT}")
-            st.write(f"Higher: **{percent(stats['share_up'])}** · Same: **{percent(stats['share_same'])}** · Lower: **{percent(stats['share_down'])}**")
+        st.markdown(f"#### {topic}")
+        paired = summary["distributions"]["knowledge_paired"][topic]
+        fig = go.Figure()
+        for period, label, color in [
+            ("before", "Recalled before", BARK),
+            ("after", "Current", JADE),
+        ]:
+            fig.add_bar(
+                name=label,
+                x=[str(int(r["value"])) for r in paired[period]["values"]],
+                y=[None if r["share"] is None else r["share"] * 100
+                   for r in paired[period]["values"]],
+                marker_color=color,
+                hovertemplate="%{y:.1f}% of paired answers<extra>" + label + "</extra>",
+            )
+        fig.update_layout(barmode="group", bargap=.25)
+        fig.update_xaxes(title="Agreement rating (1–5)", type="category")
+        _chart(fig, f"knowledge_{i}", percent_axis=True, height=325)
+        change = number(stats["mean_change"], signed=True)
+        st.markdown(
+            f"**Average rating change: {change} points** · "
+            f"{stats['n']:,} paired responses · "
+            f"{stats['missing_pair_rows']:,} incomplete pairs"
+        )
+        st.caption(
+            f"Reported higher: {percent(stats['share_up'])}; "
+            f"same: {percent(stats['share_same'])}; "
+            f"lower: {percent(stats['share_down'])}. {TOPIC_LIMIT}"
+        )
+        st.divider()
     overall = summary["knowledge"]["overall_three_topic_mean"]
     st.subheader("Overall three-topic average")
-    st.write(f"Recalled before: **{number(overall['before_mean'])}** → Current: **{number(overall['after_mean'])}** · Change: **{number(overall['mean_change'], signed=True)}**")
-    st.caption(f"n={overall['n']} rows with all six answers; {overall['missing_pair_rows']} excluded. Equal-weight row averages, not a validated composite scale. {TOPIC_LIMIT}")
+    st.write(
+        f"Recalled before: **{number(overall['before_mean'])}** → "
+        f"Current: **{number(overall['after_mean'])}** · "
+        f"Mean difference: **{number(overall['mean_change'], signed=True)}**"
+    )
+    st.caption(
+        f"{overall['n']:,} responses had all six ratings; "
+        f"{overall['missing_pair_rows']:,} did not. Equal-weight averages, "
+        "not a validated composite scale. " + TOPIC_LIMIT
+    )
 
 
 def _rating_chart(dist, key, label, scale_max):
@@ -264,46 +316,76 @@ def _rating_chart(dist, key, label, scale_max):
 
 def render_experience(clean_df, summary):
     st.subheader("Training experience")
-    cols = st.columns(3)
-    for i, (field, dist) in enumerate(summary["distributions"]["training_experience"].items()):
-        with cols[i]:
-            st.markdown(f"**{LABELS[field]}**")
-            _chart(_bar(dist["values"], "value", "count", x_title="Valid answers"), f"experience_{i}")
-            invalid = int(clean_df[f"{field}_invalid"].sum())
-            st.caption(f"Agreement 1–5: {dist['valid_n']} valid of {dist['denominator_rows']} rows; {dist['missing_or_invalid_n']} missing/invalid. Ordinal self-report.")
-            if invalid:
-                st.warning(f"{invalid} nonstandard answers excluded from scoring.")
-    left, right = st.columns(2)
-    with left:
-        st.markdown("**Recommend training**")
-        _rating_chart(summary["distributions"]["recommend_training"], "recommend", "Likelihood of recommending training", 10)
-    with right:
-        st.markdown("**Willingness to call 988**")
-        _rating_chart(summary["distributions"]["willingness_to_call"], "willingness", "Likelihood of calling 988", 10)
+    st.caption("Use a full-width distribution for each training question.")
+    for i, (field, dist) in enumerate(
+        summary["distributions"]["training_experience"].items()
+    ):
+        st.markdown(f"#### {LABELS[field]}")
+        _chart(
+            _bar(dist["values"], "value", "count",
+                 x_title="Number of valid answers", color=JADE),
+            f"experience_{i}", height=295,
+        )
+        invalid = int(clean_df[f"{field}_invalid"].sum())
+        st.caption(
+            f"Agreement 1–5: {dist['valid_n']:,} usable answers of "
+            f"{dist['denominator_rows']:,} survey responses; "
+            f"{dist['missing_or_invalid_n']:,} missing/invalid."
+        )
+        if invalid:
+            st.warning(f"{invalid:,} nonstandard answers were excluded from scoring.")
+        st.divider()
+    for key, label, question in [
+        ("recommend_training", "Recommend training", "Likelihood of recommending training"),
+        ("willingness_to_call", "Willingness to call 988", "Likelihood of calling 988"),
+    ]:
+        st.markdown(f"#### {label}")
+        _rating_chart(summary["distributions"][key], key + "_legacy", question, 10)
 
 
 def render_representation(summary):
     st.subheader("Participation & representation")
-    cols = st.columns(3)
-    for col, field, title in zip(cols, ["county", "role", "language"], ["Training counties", "Role selections", "Survey languages"]):
-        with col:
-            st.markdown(f"**{title}**")
-            coverage = summary["coverage"][field]
-            if coverage["groups"]:
-                _chart(_bar(coverage["groups"], "category", "n", x_title="Survey rows", horizontal=True), f"representation_{field}")
-            else:
-                st.info("No answered categories in this selection.")
-            st.caption(f"Counts from {summary['overview']['survey_rows']} selected rows; {coverage['missing_category_n']} unanswered categories. " + ("Multi-select roles overlap." if field == "role" else "Response share does not establish population coverage."))
+    st.caption("Counts describe survey responses, not the composition of the population.")
+    for field, title in [
+        ("county", "Training counties"),
+        ("role", "Participant roles"),
+        ("language", "Survey languages"),
+    ]:
+        st.markdown(f"#### {title}")
+        coverage = summary["coverage"][field]
+        groups = sorted(coverage["groups"], key=lambda item: item["n"], reverse=True)[:15]
+        if not groups:
+            st.info("No answered categories in this selection.")
+            continue
+        fig = _bar(
+            groups, "category", "n", x_title="Survey responses",
+            color=JADE, horizontal=True,
+        )
+        fig.update_layout(showlegend=False)
+        label_width = min(290, max(165, max(len(str(x["category"])) for x in groups)*7 + 30))
+        _chart(fig, f"representation_{field}",
+               height=max(285, 42*len(groups)+105), left=label_width)
+        st.caption(
+            f"{coverage['missing_category_n']:,} respondents left this category blank. "
+            + ("Roles can overlap when respondents selected several." if field == "role" else "")
+        )
+        st.divider()
     dates = summary["coverage"]["training_date"]
     if dates["dates"]:
-        fig = go.Figure(go.Bar(x=[v["date"][:10] for v in dates["dates"]], y=[v["n"] for v in dates["dates"]], marker_color=JADE))
-        fig.update_xaxes(title="Reported training date", type="date")
-        fig.update_yaxes(title="Survey rows", rangemode="tozero")
-        _chart(fig, "training_dates")
-        st.caption(f"Reported training dates for {sum(v['n'] for v in dates['dates'])} of {dates['denominator_rows']} rows; {dates['missing_or_invalid_n']} missing/invalid. Survey response volume does not measure attendance or training availability.")
-    st.markdown("**Not measured by this survey**")
-    st.write(" · ".join(UNMEASURED_BARRIERS))
-    st.caption("These are candidate measurement gaps, not observed disparities. Do not infer race, income, immigration status, or mental health from geography.")
+        st.markdown("#### Responses by training date")
+        fig = go.Figure(go.Bar(
+            x=[v["date"][:10] for v in dates["dates"]],
+            y=[v["n"] for v in dates["dates"]],
+            marker_color=JADE,
+        ))
+        fig.update_xaxes(title="Reported training date", type="category")
+        fig.update_yaxes(title="Survey responses", rangemode="tozero")
+        _chart(fig, "training_dates", height=350)
+        st.caption(f"{dates['missing_or_invalid_n']:,} missing/invalid dates.")
+    st.caption(
+        "County is training affiliation, not residence. Differences in response "
+        "counts do not establish population differences."
+    )
 
 
 def render_missingness(summary):
@@ -316,7 +398,7 @@ def render_missingness(summary):
     fig.update_layout(barmode="stack", height=650)
     fig.update_yaxes(autorange="reversed")
     fig.update_xaxes(title="Rows without usable answers", rangemode="tozero")
-    _chart(fig, "missingness", height=720)
+    _chart(fig, "missingness", height=720, left=260)
     st.caption(f"Question: completeness of each field. Counts across {summary['overview']['survey_rows']} selected rows; source blanks and unusable answers are separate. Nonresponse does not establish unwillingness or explain its cause.")
     st.dataframe(pd.DataFrame(records).assign(question=labels)[["question", "source_missing_n", "invalid_or_unusable_n", "usable_n", "denominator_rows"]], hide_index=True, width="stretch")
     st.markdown("**Willingness answer coverage by group**")

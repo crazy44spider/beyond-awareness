@@ -384,12 +384,89 @@ def select_source():
     return st.session_state["uploaded_result"], label, token
 
 
+def _filter_option_key(state_key: str, index: int) -> str:
+    """Stable widget identity while a single survey source is active."""
+    return f"{state_key}__option_{index}"
+
+
+def _set_filter_choices(state_key: str, options: list[str], checked: bool) -> None:
+    """Runs before rerender; keep the section open for further selections."""
+    st.session_state["filter_open_section"] = state_key
+    st.session_state[state_key] = list(options) if checked else []
+    for index in range(len(options)):
+        st.session_state[_filter_option_key(state_key, index)] = checked
+
+
+def _sync_filter_choices(state_key: str, options: list[str]) -> None:
+    """Update selected options while keeping the current checklist expanded."""
+    st.session_state["filter_open_section"] = state_key
+    st.session_state[state_key] = [
+        option for index, option in enumerate(options)
+        if st.session_state.get(_filter_option_key(state_key, index), False)
+    ]
+
+
+def _checklist_filter(label: str, options, state_key: str) -> list[str]:
+    """Dropdown-like checklist: no text entry, no growing selection chips."""
+    available = [str(option) for option in options]
+    selected = [
+        option for option in st.session_state.get(state_key, [])
+        if option in available
+    ]
+    if not selected:
+        selection_label = "All"
+    elif len(selected) == len(available):
+        selection_label = "All selected"
+    else:
+        selection_label = f"{len(selected)} selected"
+
+    with st.expander(
+        f"{label} · {selection_label}",
+        expanded=st.session_state.get("filter_open_section") == state_key,
+    ):
+        all_col, clear_col = st.columns(2)
+        with all_col:
+            st.button(
+                "Select all",
+                key=f"{state_key}_select_all",
+                use_container_width=True,
+                on_click=_set_filter_choices,
+                args=(state_key, available, True),
+            )
+        with clear_col:
+            st.button(
+                "Clear",
+                key=f"{state_key}_clear",
+                use_container_width=True,
+                on_click=_set_filter_choices,
+                args=(state_key, available, False),
+            )
+        selected_now = []
+        for index, option in enumerate(available):
+            option_key = _filter_option_key(state_key, index)
+            if option_key not in st.session_state:
+                st.session_state[option_key] = option in selected
+            if st.checkbox(
+                option,
+                key=option_key,
+                on_change=_sync_filter_choices,
+                args=(state_key, available),
+            ):
+                selected_now.append(option)
+        if not available:
+            st.caption("No options in this survey.")
+
+    # This key is the existing filter contract; only the UI changed.
+    st.session_state[state_key] = selected_now
+    return selected_now
+
+
 def sidebar_filters(clean_df, token):
     """Top-toolbar filters. This retains all original filter behavior/keys."""
     if st.session_state.get("filter_source") != token:
         for key in [
             "filter_counties", "filter_roles", "filter_languages",
-            "filter_dates_enabled", "filter_dates",
+            "filter_dates_enabled", "filter_dates", "filter_open_section",
         ]:
             st.session_state.pop(key, None)
         # A different dataset must never inherit an old PDF or action plan.
@@ -399,7 +476,11 @@ def sidebar_filters(clean_df, token):
         ]:
             st.session_state.pop(key, None)
         for key in list(st.session_state.keys()):
-            if key.startswith(("story_action_", "voice_theme_", "private_voice_")):
+            if key.startswith((
+                "story_action_", "voice_theme_", "private_voice_",
+                "filter_counties__option_", "filter_roles__option_",
+                "filter_languages__option_",
+            )):
                 st.session_state.pop(key, None)
         st.session_state["filter_source"] = token
         st.session_state["loaded_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -408,21 +489,22 @@ def sidebar_filters(clean_df, token):
         "filter_counties", "filter_roles", "filter_languages", "filter_dates_enabled",
     ])
     with st.popover(f"Filters ({active})" if active else "Filter responses", use_container_width=True):
-        st.caption("Apply these to every page.")
-        counties = st.multiselect(
+        st.markdown('<span class="ba-filter-menu-marker"></span>', unsafe_allow_html=True)
+        st.caption("Choose categories below. No selections means all responses.")
+        counties = _checklist_filter(
             "Training county",
             sorted(clean_df["county"].dropna().unique()),
-            key="filter_counties",
+            "filter_counties",
         )
-        roles = st.multiselect(
+        roles = _checklist_filter(
             "Participant role",
             sorted({r for values in clean_df["role_list"] for r in values}),
-            key="filter_roles",
+            "filter_roles",
         )
-        languages = st.multiselect(
+        languages = _checklist_filter(
             "Language",
             sorted(clean_df["language"].dropna().unique()),
-            key="filter_languages",
+            "filter_languages",
         )
         dates = clean_df["training_date"].dropna()
         use_dates = st.checkbox(

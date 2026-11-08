@@ -64,28 +64,65 @@ def _short_num(value: Any, digits: int = 1) -> str:
     return f"{float(value):.{digits}f}"
 
 
-def _plot(fig: go.Figure, key: str, *, height: int = 300, left: int = 24) -> None:
-    """Compact readable charts. Horizontal labels are never placed below the fold."""
+def _lock_figure(fig: go.Figure) -> go.Figure:
+    """Keep hover readouts; prevent zoom, pan, axis editing and legend hiding.
+
+    Plotly's hidden modebar alone does not lock navigation, and a legend
+    click can otherwise make an entire dataset appear to disappear.
+    """
+    fig.update_layout(
+        dragmode=False,
+        clickmode="none",
+        legend=dict(itemclick=False, itemdoubleclick=False),
+    )
+    fig.update_xaxes(fixedrange=True)
+    fig.update_yaxes(fixedrange=True)
+    return fig
+
+
+PLOT_CONFIG = {
+    "displaylogo": False,
+    "displayModeBar": False,
+    "scrollZoom": False,
+    "doubleClick": False,
+    "editable": False,
+    "showAxisDragHandles": False,
+    "showAxisRangeEntryBoxes": False,
+    "responsive": True,
+}
+
+
+def _plot(fig: go.Figure, key: str, *, height: int = 320, left: int = 60) -> None:
+    """A full-width, non-editable chart with readable axes and useful tooltips."""
+    visible_legend = (
+        bool(fig.layout.showlegend) if fig.layout.showlegend is not None
+        else (
+            any(trace.showlegend is True for trace in fig.data)
+            or sum(bool(trace.name) and trace.showlegend is not False
+                   for trace in fig.data) > 1
+        )
+    )
     fig.update_layout(
         template="plotly_white",
-        font=dict(family="Arial, sans-serif", size=12, color=INK),
+        font=dict(family="Arial, sans-serif", size=13, color=INK),
         paper_bgcolor="#FFFFFF",
         plot_bgcolor="#FFFFFF",
-        margin=dict(l=left, r=22, t=30, b=38),
+        colorway=[JADE, BARK, "#91B59A", "#D5BA96"],
+        margin=dict(l=left, r=30, t=63 if visible_legend else 28, b=54),
         height=height,
-        showlegend=True,
+        showlegend=visible_legend,
         legend=dict(
-            orientation="h", y=1.13, x=0,
-            bgcolor="rgba(0,0,0,0)", font=dict(size=11),
+            orientation="h", y=1.16, x=0,
+            bgcolor="rgba(0,0,0,0)", font=dict(size=12),
         ),
         hovermode="closest",
+        hoverlabel=dict(bgcolor="#F7F8F2", font=dict(color=INK, size=12)),
+        bargap=.25,
     )
-    fig.update_xaxes(gridcolor=GRID, zerolinecolor=GRID)
-    fig.update_yaxes(gridcolor=GRID, zerolinecolor=GRID)
-    st.plotly_chart(
-        fig, key=key, width="stretch", theme=None,
-        config={"displaylogo": False, "displayModeBar": False, "responsive": True},
-    )
+    fig.update_xaxes(gridcolor=GRID, zerolinecolor=GRID, automargin=True)
+    fig.update_yaxes(gridcolor=GRID, zerolinecolor=GRID, automargin=True)
+    _lock_figure(fig)
+    st.plotly_chart(fig, key=key, width="stretch", theme=None, config=PLOT_CONFIG)
 
 
 def render_overview(clean_df: pd.DataFrame, summary: dict, source_label: str) -> None:
@@ -106,7 +143,7 @@ def render_overview(clean_df: pd.DataFrame, summary: dict, source_label: str) ->
 
     kpis([
         ("Responses included", f"{n:,}", "Current survey selection"),
-        ("Answered the call question", _pct(rate), f"{answered:,} answered; {missing:,} missing or invalid"),
+        ("Answered the willingness-to-call question", _pct(rate), f"{answered:,} of {n:,} responded; {missing:,} missing or invalid"),
     ])
 
     knowledge = summary["knowledge"]["topics"]
@@ -208,9 +245,7 @@ def render_training_outcomes(clean_df: pd.DataFrame, summary: dict) -> None:
             showlegend=index == 0, name="Current",
             hovertemplate="%{y}: %{x:.2f}<extra>Current</extra>",
         ))
-    fig.update_layout(
-        title=dict(text="Recalled-before vs. current ratings", x=.02, font=dict(size=15)),
-    )
+    st.subheader("Recalled-before vs. current knowledge ratings")
     fig.update_xaxes(range=[.8, 5.2], title="Agreement score, 1–5", dtick=1)
     fig.update_yaxes(
         categoryorder="array",
@@ -219,35 +254,42 @@ def render_training_outcomes(clean_df: pd.DataFrame, summary: dict) -> None:
         tickfont=dict(size=12),
         automargin=True,
     )
-    _plot(fig, "story_learning_dumbbell", height=285, left=175)
+    _plot(fig, "story_learning_dumbbell", height=330, left=185)
 
-    improved = [label for label, item in usable
-                if float(item["after_mean"]) > float(item["before_mean"])]
+    improved = [
+        (label, item) for label, item in usable
+        if float(item["after_mean"]) > float(item["before_mean"])
+    ]
     if improved:
+        strongest_name, strongest = max(
+            improved, key=lambda pair: float(pair[1]["mean_change"])
+        )
+        largest = translated.get(strongest_name, strongest_name).lower()
         takeaway(
-            f"Higher current ratings in {len(improved)} of {len(usable)} topics.",
-            "Only matched recalled-before and current ratings enter each comparison. "
-            "An observed difference is not evidence of a causal effect.",
-            label="HOW TO READ IT",
+            f"Largest reported difference: {largest} "
+            f"(+{float(strongest['mean_change']):.2f} points).",
+            f"Based on {int(strongest['n']):,} paired responses on the 1–5 agreement scale. "
+            "These are recalled-before versus current self-ratings, not causal proof.",
+            label="KEY FINDING",
         )
     else:
         takeaway(
-            "The displayed topics do not show higher current averages.",
-            "Inspect paired responses before concluding anything about training effects.",
-            label="HOW TO READ IT",
+            "No knowledge topic has a higher current average.",
+            "Only matched before/current ratings are compared. "
+            "A reported difference cannot establish a causal effect.",
+            label="KEY FINDING",
         )
 
     st.caption(
         "Participants reported what they remembered knowing before the training only afterward. "
         "These comparisons describe perceptions, not causal effects."
     )
-    if st.button(
-        "See distributions and group comparisons",
+    st.button(
+        "See distributions and group comparisons in Data Explorer",
         key="outcomes_to_details",
         on_click=_navigate,
         args=("Detailed Analysis",),
-    ):
-        pass
+    )
 
 
 def render_gap_diagnostic(clean_df: pd.DataFrame) -> None:
@@ -269,56 +311,74 @@ def render_gap_diagnostic(clean_df: pd.DataFrame) -> None:
     coverage = (answered / total) if total else 0.0
     pct = round(coverage * 100, 1)
 
-    st.subheader("First, who answered?")
+    st.subheader("How many answered the willingness-to-call question?")
     st.progress(coverage)
+    st.caption(f"{answered:,} of {total:,} survey responses answered ({pct:.1f}%).")
     l, r = st.columns(2)
     with l:
-        st.metric("Answered the call question", f"{answered:,}", help=f"{pct}% of {total:,}")
+        st.metric("Usable willingness answers", f"{answered:,} of {total:,}")
     with r:
-        st.metric("No usable call answer", f"{missing:,}")
+        st.metric("Missing or invalid answers", f"{missing:,} of {total:,}")
     st.caption(
-        "The unanswered responses cannot be interpreted as unwillingness. "
-        "Some survey versions may not have asked the question."
+        "The survey measures reported willingness to CALL 988, not actual use. "
+        "A missing answer is not evidence of unwillingness."
     )
 
     st.divider()
-    st.subheader("Among people who answered both questions")
     n = int(relation["complete_case_n"])
     gap = int(relation["gap_count"])
+    st.subheader("Knowing when to use 988 vs. willingness to call")
     if n > 0:
         rate = gap / n
-        left, right = st.columns([1, 2], gap="large")
-        with left:
-            st.markdown(
-                f'<div style="font:600 3.7rem Georgia,serif;color:{FOREST};'
-                f'letter-spacing:-.07em;line-height:1.1">{rate*100:.0f}%</div>',
-                unsafe_allow_html=True,
+        if gap == 0:
+            interpretation = (
+                f"None of the {n:,} responses with both answers showed "
+                "high knowledge AND lower willingness to call."
             )
-            st.caption(f"{gap:,} of {n:,} complete answers")
-        with right:
-            takeaway(
-                "High knowledge, but lower willingness to call.",
-                "These respondents rated knowing when to use 988 at 4–5 "
-                "and willingness to call at 0–5. The survey doesn't explain why.",
-                label="DEFINED PATTERN",
+        else:
+            interpretation = (
+                "of responses with both answers showed high knowledge "
+                "but lower willingness to call 988."
             )
+        st.markdown(
+            '<div class="ba-gap-result">'
+            f'<div class="ba-gap-number">{rate*100:.0f}%</div>'
+            f'<div class="ba-gap-definition">{esc(interpretation)}</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"**{gap:,} of {n:,} paired survey responses** match this pattern."
+        )
+        st.markdown(
+            '<div class="ba-definition-note">'
+            '<b>High knowledge:</b> knowing when to use 988 rated 4–5 out of 5. '
+            '<b>Lower willingness:</b> willingness to call rated 0–5 out of 10.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
     else:
-        st.info("There are not enough complete knowledge-and-call responses to compare.")
+        st.info(
+            "No responses have both a usable knowledge-of-988 rating and "
+            "a willingness-to-call rating. This gap cannot be calculated."
+        )
 
-    st.markdown("### What could explain the gap?")
+    st.markdown("### What the percentage cannot tell us")
     st.write(
-        "Trust, privacy, preferring text, uncertainty about needing help—"
-        "all are possibilities **not measured directly** by this survey."
+        "The survey doesn't ask **why** some respondents hesitate. "
+        "Trust, confidentiality, and preferring text or chat are questions "
+        "worth investigating—not explanations established by this data."
     )
     st.button(
-        "See questions that could fill the gaps",
+        "Explore follow-up questions in Survey Designer",
         on_click=_navigate,
         args=("Survey Designer",),
         key="gap_to_survey",
     )
     st.caption(
-        "For cross-tabulations, score distributions and the Spearman correlation, "
-        "use Detailed Analysis. The relationship is observational."
+        "The denominator includes only responses with BOTH usable answers. "
+        "For underlying distributions and correlations, open Data Explorer. "
+        "These are self-reported intentions, not observed behavior."
     )
 
 
@@ -377,9 +437,9 @@ def _draw_theme_donut(counts: pd.Series, selected: str, key: str) -> None:
         paper_bgcolor="white",
         plot_bgcolor="white",
     )
+    _lock_figure(fig)
     st.plotly_chart(
-        fig, key=key, width="stretch", theme=None,
-        config={"displayModeBar": False, "displaylogo": False},
+        fig, key=key, width="stretch", theme=None, config=PLOT_CONFIG,
     )
 
 
@@ -784,21 +844,36 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
             "Change": overall["mean_change"],
             "Incomplete pairs": overall["missing_pair_rows"],
         })
-        graph_rows = rows[:-1]
-        fig = go.Figure()
-        fig.add_bar(
-            name="Recalled before", x=[r["Topic"] for r in graph_rows],
-            y=[r["Recalled before"] for r in graph_rows],
-            marker_color=BARK,
-        )
-        fig.add_bar(
-            name="Current", x=[r["Topic"] for r in graph_rows],
-            y=[r["Current"] for r in graph_rows],
-            marker_color=JADE,
-        )
-        fig.update_layout(barmode="group")
-        fig.update_yaxes(range=[0, 5], title="Mean rating (1–5)")
-        _plot(fig, "explorer_knowledge_chart", height=335)
+        graph_rows = [
+            r for r in rows[:-1]
+            if r["Recalled before"] is not None and r["Current"] is not None
+        ]
+        if graph_rows:
+            fig = go.Figure()
+            fig.add_bar(
+                name="Recalled before",
+                x=[r["Recalled before"] for r in graph_rows],
+                y=[r["Topic"] for r in graph_rows],
+                orientation="h", marker_color=BARK,
+                text=[f'{r["Recalled before"]:.2f}' for r in graph_rows],
+                textposition="outside",
+                hovertemplate="%{y}: %{x:.2f}/5<extra>Recalled before</extra>",
+            )
+            fig.add_bar(
+                name="Current",
+                x=[r["Current"] for r in graph_rows],
+                y=[r["Topic"] for r in graph_rows],
+                orientation="h", marker_color=JADE,
+                text=[f'{r["Current"]:.2f}' for r in graph_rows],
+                textposition="outside",
+                hovertemplate="%{y}: %{x:.2f}/5<extra>Current</extra>",
+            )
+            fig.update_layout(barmode="group", uniformtext=dict(minsize=11, mode="hide"))
+            fig.update_xaxes(range=[0, 5.7], title="Average knowledge rating (1–5)", dtick=1)
+            fig.update_yaxes(autorange="reversed", showgrid=False)
+            _plot(fig, "explorer_knowledge_chart", height=340, left=205)
+        else:
+            st.info("No matched knowledge ratings are available in this selection.")
         st.caption("Exact paired sample sizes and values")
         st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
         st.caption("Retrospective self-report. Each topic has its own matched sample; "
@@ -830,9 +905,9 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
             marker_color=JADE,
         ))
         fig.update_layout(showlegend=False)
-        fig.update_xaxes(title="Response score", type="category")
-        fig.update_yaxes(title="Responses", rangemode="tozero")
-        _plot(fig, "explorer_rating_chart", height=290)
+        fig.update_xaxes(title="Rating selected", type="category")
+        fig.update_yaxes(title="Number of survey responses", rangemode="tozero")
+        _plot(fig, "explorer_rating_chart", height=320, left=70)
         st.markdown("#### Exact score counts")
         st.dataframe(
             pd.DataFrame([
@@ -887,9 +962,11 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
                 orientation="h", marker_color=JADE,
             ))
             fig.update_layout(showlegend=False)
-            fig.update_yaxes(autorange="reversed")
-            fig.update_xaxes(title="Survey rows", rangemode="tozero")
-            _plot(fig, "explorer_participation_chart", height=max(260, len(top)*34+85), left=120)
+            fig.update_yaxes(autorange="reversed", showgrid=False)
+            fig.update_xaxes(title="Survey responses", rangemode="tozero")
+            label_width = min(290, max(150, max(len(str(x)) for x in top[cat])*7 + 30))
+            _plot(fig, "explorer_participation_chart",
+                  height=max(290, len(top)*40+110), left=label_width)
             st.caption("Exact counts and coverage")
             st.dataframe(frame, hide_index=True, width="stretch")
         st.caption("Counts describe survey rows, not population representation. "
@@ -916,13 +993,26 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
             }
             for item in summary["missingness"]
         ])
-        top = frame.sort_values("Blank", ascending=False).head(12)
+        top = (
+            frame.assign(unusable=frame["Blank"] + frame["Invalid"])
+            .sort_values("unusable", ascending=False).head(12)
+        )
         fig = go.Figure()
-        fig.add_bar(name="Blank", x=top["Question"], y=top["Blank"], marker_color=BARK)
-        fig.add_bar(name="Invalid", x=top["Question"], y=top["Invalid"], marker_color=JADE)
+        fig.add_bar(
+            name="Blank", x=top["Blank"], y=top["Question"],
+            orientation="h", marker_color=BARK,
+            hovertemplate="%{y}<br>%{x} blank<extra></extra>",
+        )
+        fig.add_bar(
+            name="Invalid / unusable", x=top["Invalid"], y=top["Question"],
+            orientation="h", marker_color=JADE,
+            hovertemplate="%{y}<br>%{x} invalid<extra></extra>",
+        )
         fig.update_layout(barmode="stack")
-        fig.update_yaxes(title="Missing or invalid answers", rangemode="tozero")
-        _plot(fig, "explorer_coverage_chart", height=340)
+        fig.update_yaxes(autorange="reversed", showgrid=False)
+        fig.update_xaxes(title="Survey responses without a usable answer", rangemode="tozero")
+        _plot(fig, "explorer_coverage_chart",
+              height=max(390, len(top)*40+110), left=260)
         st.caption("Exact answer coverage")
         st.dataframe(frame, hide_index=True, width="stretch")
         st.caption("Blank and invalid answers are reported separately. Neither implies reluctance.")
@@ -966,7 +1056,9 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
                 ))
                 fig.update_layout(showlegend=False)
                 fig.update_xaxes(title="Mean rating change (points)")
-                _plot(fig, "explorer_comparison_chart", height=max(260, len(chart_frame)*32+90), left=120)
+                label_width = min(290, max(150, max(len(str(x)) for x in chart_frame["Group"])*7 + 30))
+                _plot(fig, "explorer_comparison_chart",
+                      height=max(280, len(chart_frame)*40+110), left=label_width)
             else:
                 st.info("No group meets the minimum paired-response threshold for this topic.")
             st.caption("Exact group comparisons, with suppressed means left blank")

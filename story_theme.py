@@ -389,6 +389,49 @@ section[data-testid="stSidebar"],
     background:#FFFFFF !important;
     box-shadow:none !important;
 }
+
+/* Filter menu is a stable-width, vertically scrolling checklist.
+   Do not affect the separate Data Source upload popover. */
+[data-testid="stPopoverBody"]:has(.ba-filter-menu-marker) {
+    width:min(400px, calc(100vw - 24px)) !important;
+    min-width:min(400px, calc(100vw - 24px)) !important;
+    max-width:min(400px, calc(100vw - 24px)) !important;
+    max-height:min(74dvh, 640px) !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    box-sizing:border-box !important;
+}
+[data-testid="stPopoverBody"]:has(.ba-filter-menu-marker) [data-testid="stExpander"] {
+    width:100% !important;
+    min-width:0 !important;
+    margin-bottom:7px !important;
+    border:1px solid #DCE7DC !important;
+    border-radius:9px !important;
+    background:#F8FAF6 !important;
+}
+[data-testid="stPopoverBody"]:has(.ba-filter-menu-marker) [data-testid="stExpander"] details summary {
+    min-height:43px !important;
+    color:#214934 !important;
+    font-weight:650 !important;
+}
+[data-testid="stPopoverBody"]:has(.ba-filter-menu-marker) [data-testid="stCheckbox"] {
+    margin:0 !important;
+}
+[data-testid="stPopoverBody"]:has(.ba-filter-menu-marker) [data-testid="stCheckbox"] label {
+    padding:5px 0 !important;
+    line-height:1.3 !important;
+}
+[data-testid="stPopoverBody"]:has(.ba-filter-menu-marker) [data-testid="stButton"] button {
+    min-height:32px !important;
+    padding:5px 9px !important;
+    font-size:.77rem !important;
+    font-weight:600 !important;
+    border-radius:7px !important;
+}
+[data-testid="stPopoverBody"]:has(.ba-filter-menu-marker) [data-testid="stVerticalBlock"] {
+    min-width:0 !important;
+}
+
 [data-testid="stPopover"] button {
     width:100%;
     min-height:37px !important;
@@ -492,6 +535,48 @@ button[data-testid="stBaseButton-primary"] {
 [data-testid="stSidebar"] .stButton > button:hover p {
     color:#F7FAF4 !important;
 }
+
+/* The metric's meaning is part of the headline, not a footnote. */
+.ba-gap-result {
+  display:flex; flex-wrap:wrap;
+  align-items:center; gap:14px 28px;
+  padding:24px 26px;
+  background:#FFFFFF;
+  border:1px solid #DDE7DC;
+  border-left:5px solid #287859;
+  border-radius:14px;
+  margin:14px 0 12px;
+}
+.ba-gap-number {
+  font:600 clamp(3.8rem,6.4vw,5.3rem)/1 Georgia,"Times New Roman",serif;
+  color:#153D2B;
+  letter-spacing:-.065em;
+  font-variant-numeric:tabular-nums;
+  flex:0 0 auto;
+}
+.ba-gap-definition {
+  color:#254B36;
+  font-weight:730;
+  line-height:1.3;
+  font-size:clamp(1rem,1.65vw,1.28rem);
+  flex:1 1 270px;
+  max-width:630px;
+}
+.ba-definition-note {
+  border-radius:10px;
+  background:#EBF3E9;
+  color:#365846;
+  font-size:.89rem;
+  line-height:1.6;
+  padding:14px 18px;
+  margin:12px 0 18px;
+}
+.ba-definition-note b {color:#184532;}
+@media(max-width:650px) {
+ .ba-gap-result {padding:18px;gap:8px;}
+ .ba-gap-number {font-size:3.65rem;}
+}
+
 /* Numbers-only reference screen: compact, legible evidence tables. */
 .ba-data-explorer-head {
   border-bottom:1px solid #DBE6DA;

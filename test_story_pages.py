@@ -1,9 +1,12 @@
 """Safe unit tests of story-facing transformations; no participant data used."""
 import unittest
+from unittest.mock import patch
+
+import plotly.graph_objects as go
 
 import pandas as pd
 
-from story_pages import _pct, _private_preview, _pick_themes
+from story_pages import _pct, _private_preview, _pick_themes, _lock_figure, PLOT_CONFIG
 from story_theme import esc
 
 
@@ -33,6 +36,55 @@ class StoryPresentationTests(unittest.TestCase):
         self.assertNotIn("https://example.org", masked)
         self.assertIn("[email]", masked)
         self.assertIn("[phone]", masked)
+
+    def test_figure_is_not_zoomable_draggable_or_hideable(self):
+        fig = go.Figure()
+        fig.add_bar(name="Before", x=[2, 3], y=["A", "B"])
+        fig.add_bar(name="Current", x=[4, 5], y=["A", "B"])
+        self.assertIs(_lock_figure(fig), fig)
+        self.assertIs(fig.layout.dragmode, False)
+        self.assertEqual(fig.layout.clickmode, "none")
+        self.assertIs(fig.layout.xaxis.fixedrange, True)
+        self.assertIs(fig.layout.yaxis.fixedrange, True)
+        self.assertIs(fig.layout.legend.itemclick, False)
+        self.assertIs(fig.layout.legend.itemdoubleclick, False)
+        self.assertIs(PLOT_CONFIG["scrollZoom"], False)
+        self.assertIs(PLOT_CONFIG["doubleClick"], False)
+        self.assertIs(PLOT_CONFIG["editable"], False)
+        self.assertNotIn("staticPlot", PLOT_CONFIG)  # Keep hover readouts.
+
+    def test_legacy_charts_are_locked_too(self):
+        from dashboard import _chart
+        fig = go.Figure(go.Bar(x=[1, 2], y=[5, 8]))
+        with patch("dashboard.st.plotly_chart") as chart:
+            _chart(fig, "unit_locked", height=320)
+            self.assertTrue(chart.called)
+            options = chart.call_args.kwargs["config"]
+            self.assertIs(options["scrollZoom"], False)
+            self.assertIs(options["doubleClick"], False)
+            self.assertIs(fig.layout.xaxis.fixedrange, True)
+            self.assertIs(fig.layout.yaxis.fixedrange, True)
+            self.assertIs(fig.layout.dragmode, False)
+
+    def test_checkbox_filters_keep_existing_selection_contract(self):
+        from app import _set_filter_choices, _sync_filter_choices, _filter_option_key
+        state = {}
+        options = ["Fairfax", "Montgomery", "Prince George's"]
+        with patch("app.st.session_state", state):
+            _set_filter_choices("filter_counties", options, True)
+            self.assertEqual(state["filter_open_section"], "filter_counties")
+            self.assertEqual(state["filter_counties"], options)
+            self.assertTrue(state[_filter_option_key("filter_counties", 2)])
+            state[_filter_option_key("filter_counties", 1)] = False
+            _sync_filter_choices("filter_counties", options)
+            self.assertEqual(state["filter_open_section"], "filter_counties")
+            self.assertEqual(
+                state["filter_counties"], ["Fairfax", "Prince George's"]
+            )
+            _set_filter_choices("filter_counties", options, False)
+            self.assertEqual(state["filter_open_section"], "filter_counties")
+            self.assertEqual(state["filter_counties"], [])
+            self.assertFalse(state[_filter_option_key("filter_counties", 0)])
 
     def test_html_is_escaped_in_custom_cards(self):
         self.assertEqual(esc("<script>"), "&lt;script&gt;")
