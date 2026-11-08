@@ -53,6 +53,10 @@ h3 { font-size: 1.16rem !important; font-weight: 720 !important; }
 p { line-height: 1.52; }
 [data-testid="stCaptionContainer"] p { color:#736985; }
 
+/* Streamlit heading permalink icons distract from the presentation. */
+[data-testid="stHeadingWithActionElements"] a,
+[data-testid="stHeaderActionElements"],
+a[data-testid="stHeaderActionElements"] { display:none !important; }
 /* ── Sidebar navigation ───────────────────────────── */
 [data-testid="stSidebar"] {
     background: linear-gradient(174deg,#51317C 0%,#422A6F 56%,#352354 100%);
