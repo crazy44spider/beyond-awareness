@@ -692,6 +692,8 @@ def render_reports(clean_df: pd.DataFrame, summary: dict,
         + esc(f"{len(clean_df):,}") + '</p>',
         '<div class="paper-label" style="margin-top:20px">Selected improvements</div>',
     ]
+    if not selected:
+        st.info("This report works without an action plan: you can generate a findings-only Improvement Brief right now. To add recommendations, open Intervention Planner and select improvements.")
     if plans:
         for i, plan in enumerate(plans, 1):
             preview.append(
@@ -739,7 +741,7 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
     heading(
         "REFERENCE / DATA EXPLORER",
         "The numbers behind the findings.",
-        "A compact reference for sample sizes, ratings, response coverage and comparisons.",
+        "Explore the distributions and comparisons behind the findings, with exact counts below each chart.",
     )
     if clean_df.empty:
         st.info("No responses match the current filters.")
@@ -782,6 +784,22 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
             "Change": overall["mean_change"],
             "Incomplete pairs": overall["missing_pair_rows"],
         })
+        graph_rows = rows[:-1]
+        fig = go.Figure()
+        fig.add_bar(
+            name="Recalled before", x=[r["Topic"] for r in graph_rows],
+            y=[r["Recalled before"] for r in graph_rows],
+            marker_color=BARK,
+        )
+        fig.add_bar(
+            name="Current", x=[r["Topic"] for r in graph_rows],
+            y=[r["Current"] for r in graph_rows],
+            marker_color=JADE,
+        )
+        fig.update_layout(barmode="group")
+        fig.update_yaxes(range=[0, 5], title="Mean rating (1–5)")
+        _plot(fig, "explorer_knowledge_chart", height=335)
+        st.caption("Exact paired sample sizes and values")
         st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
         st.caption("Retrospective self-report. Each topic has its own matched sample; "
                    "the three-topic average requires all six ratings.")
@@ -805,7 +823,17 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
         a.metric("Usable answers", f'{dist["valid_n"]:,}')
         b.metric("Missing or invalid", f'{dist["missing_or_invalid_n"]:,}')
         c.metric("All selected rows", f'{dist["denominator_rows"]:,}')
-        st.markdown("#### Responses by score")
+        fig = go.Figure(go.Bar(
+            x=[str(int(v["value"])) if float(v["value"]).is_integer() else str(v["value"])
+               for v in dist["values"]],
+            y=[v["count"] for v in dist["values"]],
+            marker_color=JADE,
+        ))
+        fig.update_layout(showlegend=False)
+        fig.update_xaxes(title="Response score", type="category")
+        fig.update_yaxes(title="Responses", rangemode="tozero")
+        _plot(fig, "explorer_rating_chart", height=290)
+        st.markdown("#### Exact score counts")
         st.dataframe(
             pd.DataFrame([
                 {"Score": int(item["value"]) if float(item["value"]).is_integer() else item["value"],
@@ -851,6 +879,18 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
         if frame.empty:
             st.info("No categorized responses for this selection.")
         else:
+            top = frame.sort_values("Survey rows", ascending=False).head(12)
+            cat = "Date" if dimension == "Training date" else "Category"
+            fig = go.Figure(go.Bar(
+                x=top["Survey rows"].tolist(),
+                y=top[cat].astype(str).tolist(),
+                orientation="h", marker_color=JADE,
+            ))
+            fig.update_layout(showlegend=False)
+            fig.update_yaxes(autorange="reversed")
+            fig.update_xaxes(title="Survey rows", rangemode="tozero")
+            _plot(fig, "explorer_participation_chart", height=max(260, len(top)*34+85), left=120)
+            st.caption("Exact counts and coverage")
             st.dataframe(frame, hide_index=True, width="stretch")
         st.caption("Counts describe survey rows, not population representation. "
                    "Participant roles can overlap.")
@@ -876,6 +916,14 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
             }
             for item in summary["missingness"]
         ])
+        top = frame.sort_values("Blank", ascending=False).head(12)
+        fig = go.Figure()
+        fig.add_bar(name="Blank", x=top["Question"], y=top["Blank"], marker_color=BARK)
+        fig.add_bar(name="Invalid", x=top["Question"], y=top["Invalid"], marker_color=JADE)
+        fig.update_layout(barmode="stack")
+        fig.update_yaxes(title="Missing or invalid answers", rangemode="tozero")
+        _plot(fig, "explorer_coverage_chart", height=340)
+        st.caption("Exact answer coverage")
         st.dataframe(frame, hide_index=True, width="stretch")
         st.caption("Blank and invalid answers are reported separately. Neither implies reluctance.")
 
@@ -909,6 +957,19 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
         if frame.empty:
             st.info("No groups match the current selection.")
         else:
+            chart_frame = frame.dropna(subset=["Change"]).sort_values("Change").tail(12)
+            if not chart_frame.empty:
+                fig = go.Figure(go.Bar(
+                    x=chart_frame["Change"].tolist(),
+                    y=chart_frame["Group"].astype(str).tolist(),
+                    orientation="h", marker_color=BARK,
+                ))
+                fig.update_layout(showlegend=False)
+                fig.update_xaxes(title="Mean rating change (points)")
+                _plot(fig, "explorer_comparison_chart", height=max(260, len(chart_frame)*32+90), left=120)
+            else:
+                st.info("No group meets the minimum paired-response threshold for this topic.")
+            st.caption("Exact group comparisons, with suppressed means left blank")
             st.dataframe(frame, hide_index=True, width="stretch")
         st.caption(f"Mean comparisons are suppressed when fewer than {summary['min_group_n']} "
                    "paired responses are available. Role groups may overlap.")
@@ -929,8 +990,21 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
             ]),
             hide_index=True, width="stretch",
         )
-        st.markdown("#### Knowledge versus willingness — cross-tabulated counts")
-        st.dataframe(related["heatmap"], width="stretch")
+        st.markdown("#### Knowledge versus willingness — response counts")
+        heat = related["heatmap"]
+        fig = go.Figure(go.Heatmap(
+            z=heat.to_numpy(), x=[str(c) for c in heat.columns],
+            y=[str(r) for r in heat.index], colorscale=[
+                [0, "#F5F7F0"], [0.5, "#94BDA1"], [1, "#237557"]
+            ], colorbar=dict(title="Responses"),
+            hovertemplate="Knowledge %{y}<br>Willingness %{x}<br>%{z} responses<extra></extra>",
+        ))
+        fig.update_layout(showlegend=False)
+        fig.update_xaxes(title="Willingness score (0–10)", type="category")
+        fig.update_yaxes(title="Knowledge score (1–5)", type="category")
+        _plot(fig, "explorer_gap_heatmap", height=310, left=70)
+        with st.expander("View exact cross-tabulated counts"):
+            st.dataframe(heat, width="stretch")
         score_counts = call["score_distribution"]
         st.markdown("#### Willingness scores")
         st.dataframe(
