@@ -291,6 +291,77 @@ section[data-testid="stSidebar"],
     margin:9px 9px 8px;
 }
 
+
+/* The rail is a full-height navigation surface, not a stack of tiny buttons.
+   Streamlit's nested button markup must also be aligned (not only the button). */
+[data-testid="stSidebarUserContent"] {
+  min-height:calc(100dvh - 4rem) !important;
+  padding:20px 13px 22px !important;
+}
+[data-testid="stSidebarUserContent"] > div,
+[data-testid="stSidebarUserContent"] > div > [data-testid="stVerticalBlock"],
+[data-testid="stSidebarUserContent"] [data-testid="stVerticalBlock"]:has(.ba-nav-brand) {
+  min-height:calc(100dvh - 7rem) !important;
+}
+[data-testid="stSidebarUserContent"] [data-testid="stVerticalBlock"]:has(.ba-nav-brand) {
+  display:flex !important;
+  flex-direction:column !important;
+  justify-content:space-between !important;
+  gap:clamp(12px, 2vh, 26px) !important;
+}
+.ba-nav-brand {
+  padding:4px 4px 0 !important;
+  margin-bottom:clamp(20px, 3vh, 34px) !important;
+  min-height:51px !important;
+}
+[data-testid="stSidebar"] [data-testid="stButton"] {
+  width:100% !important;
+  margin:0 !important;
+}
+[data-testid="stSidebar"] [data-testid="stButton"] button,
+[data-testid="stSidebar"] button[data-testid^="stBaseButton"] {
+  display:flex !important;
+  flex-direction:row !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  text-align:left !important;
+  width:100% !important;
+  min-height:clamp(44px, 6vh, 61px) !important;
+  padding:12px 15px !important;
+  line-height:1.25 !important;
+  font-size:.87rem !important;
+}
+[data-testid="stSidebar"] [data-testid="stButton"] button > div,
+[data-testid="stSidebar"] [data-testid="stButton"] button [data-testid="stMarkdownContainer"],
+[data-testid="stSidebar"] [data-testid="stButton"] button p,
+[data-testid="stSidebar"] button[data-testid^="stBaseButton"] > div,
+[data-testid="stSidebar"] button[data-testid^="stBaseButton"] p {
+  width:100% !important;
+  text-align:left !important;
+  justify-content:flex-start !important;
+  margin:0 !important;
+}
+[data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"],
+[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"] {
+  border-left:3px solid #88D4A0 !important;
+  padding-left:12px !important;
+}
+.ba-nav-separator {
+  height:1px !important;
+  flex:0 0 1px !important;
+  margin:clamp(8px,1.5vh,18px) 8px !important;
+}
+@media(max-height:710px) {
+  [data-testid="stSidebarUserContent"] [data-testid="stVerticalBlock"]:has(.ba-nav-brand) {
+    min-height:0 !important;
+    gap:9px !important;
+  }
+  [data-testid="stSidebar"] [data-testid="stButton"] button {
+    min-height:42px !important;
+    padding:9px 12px !important;
+  }
+}
+
 /* ── Always-visible, compact data controls above page content ── */
 .ba-data-toolbar-label {
     color:#6D8073;
