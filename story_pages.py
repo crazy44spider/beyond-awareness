@@ -22,6 +22,7 @@ from dashboard import (
     render_missingness,
     render_quality,
     render_representation,
+    render_overview as render_original_overview,
 )
 from feedback_analyzer import analyze_feedback
 from intervention_planner import (
@@ -40,7 +41,11 @@ from story_theme import (
     FOREST, GOLD, GRID, INK, JADE, MUTED, SAGE,
     esc, flow_step, guide_card, heading, kpis, pill, takeaway,
 )
-from team_integration import build_action_findings, render_pdf_report
+from team_integration import (
+    build_action_findings,
+    render_action_lab as render_original_action_lab,
+    render_pdf_report,
+)
 
 
 def _navigate(page: str) -> None:
@@ -736,7 +741,7 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
     tabs = st.tabs([
         "Knowledge details", "Training ratings", "Representation",
         "Response coverage", "Group comparisons", "Data quality",
-        "Knowledge & call",
+        "Knowledge & call", "Original overview", "Action tools",
     ])
     with tabs[0]:
         render_knowledge(summary)
@@ -773,3 +778,10 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
         st.caption(
             "Only matched, usable answers are included. No causal conclusion follows."
         )
+
+    with tabs[7]:
+        # The original full-detail overview remains accessible, not deleted.
+        render_original_overview(summary)
+    with tabs[8]:
+        # Preserve Person 5's comparison mode and inclusive-action lens, too.
+        render_original_action_lab(clean_df)
