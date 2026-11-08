@@ -371,6 +371,22 @@ def render_action_lab(clean_df: pd.DataFrame) -> None:
     )
 
 
+@st.cache_data(show_spinner=False, ttl=3600, max_entries=6)
+def _pdf_feedback_counts(voice_df: pd.DataFrame) -> tuple[pd.Series, int]:
+    """Cache the same keyword coding used by Participant Voices."""
+    result = analyze_feedback(voice_df)
+    skip = {
+        "Other", "Too brief to code",
+        "Positive / nothing to change",
+        "No further questions / nothing to add",
+        "Answered about helping others / self (not the training)",
+    }
+    counts = result["improve_counts"]
+    counts = counts[~counts.index.isin(skip)].head(5)
+    valid_comments = int(result["data"]["improve_en"].notna().sum())
+    return counts, valid_comments
+
+
 def to_person5_metrics(clean_df: pd.DataFrame, summary: dict, source_label: str) -> dict:
     """Use current filtered data for PDF figures, not hardcoded audit statuses."""
     overview = summary.get("overview", {})
@@ -426,17 +442,20 @@ def to_person5_metrics(clean_df: pd.DataFrame, summary: dict, source_label: str)
         if row["dimension"] in audit_map
     }
 
-    # Include preliminary theme counts as preliminary, not validated. No
-    # individual comments or ID-keyed translations leave the PDF metrics.
+    # Counts are preliminary keyword matches, not validated interpretations.
+    # No individual comments or raw participant IDs enter PDF metrics.
     themes = []
     if not clean_df.empty:
-        feedback = analyze_feedback(clean_df)
-        count = int(feedback["data"]["improve_en"].notna().sum())
-        from story_pages import _pick_themes
-        counts = _pick_themes(feedback["improve_counts"], max_items=5)
+        preview_columns = [
+            col for col in (
+                "id", "valuable_feedback", "improvement_feedback",
+                "county", "participant_type",
+            ) if col in clean_df
+        ]
+        counts, usable = _pdf_feedback_counts(clean_df[preview_columns].copy())
         themes = [
             {"theme": str(label), "count": int(value),
-             "denominator": count, "validated": False}
+             "denominator": usable, "validated": False}
             for label, value in counts.items()
         ]
 
