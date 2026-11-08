@@ -198,6 +198,147 @@ button:focus-visible, [role="radio"]:focus-visible,
 @media(prefers-reduced-motion:reduce) {
   *{scroll-behavior:auto !important;transition:none !important;}
 }
+
+/* ── Compact Spotify-inspired navigation, with no emoji/icon dependencies ── */
+section[data-testid="stSidebar"],
+[data-testid="stSidebar"] {
+    width:220px !important;
+    min-width:220px !important;
+    max-width:220px !important;
+    background:#121D18 !important;
+    border-right:1px solid #2C3B31 !important;
+}
+[data-testid="stSidebarUserContent"] {
+    padding:16px 13px 18px !important;
+}
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+    gap:.1rem !important;
+}
+.ba-nav-brand {
+    display:flex;align-items:center;gap:11px;
+    padding:10px 4px 24px;
+}
+.ba-nav-monogram {
+    display:flex;align-items:center;justify-content:center;
+    width:37px;height:37px;flex-shrink:0;
+    border-radius:10px;
+    color:#DFF6E1;
+    background:#24533B;
+    border:1px solid #3C7051;
+    font-family:Arial,sans-serif;
+    font-size:.79rem;font-weight:800;letter-spacing:-.07em;
+}
+.ba-nav-title {
+    color:#F5F7F1;
+    font-size:.76rem;font-weight:800;
+    line-height:1.21;letter-spacing:.055em;
+}
+.ba-nav-section {
+    color:#839B8C !important;
+    font-size:.63rem;
+    letter-spacing:.16em;
+    font-weight:760;
+    margin:1px 0 9px 14px;
+}
+.ba-nav-secondary {
+    margin-top:21px;
+    padding-top:18px;
+    border-top:1px solid #2A3C31;
+}
+[data-testid="stSidebar"] .stButton > button,
+[data-testid="stSidebar"] button[data-testid^="stBaseButton"] {
+    width:100% !important;
+    min-height:39px !important;
+    padding:8px 12px !important;
+    border-radius:8px !important;
+    border:1px solid transparent !important;
+    background:transparent !important;
+    color:#B4C3B9 !important;
+    text-align:left !important;
+    justify-content:flex-start !important;
+    font-size:.83rem !important;
+    font-weight:550 !important;
+    box-shadow:none !important;
+    letter-spacing:0 !important;
+}
+[data-testid="stSidebar"] .stButton > button p {color:inherit !important;}
+[data-testid="stSidebar"] .stButton > button:hover {
+    color:#FFFDF5 !important;
+    background:#26382C !important;
+    border-color:#26382C !important;
+}
+[data-testid="stSidebar"] .stButton > button[kind="primary"],
+[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"] {
+    color:#FFFFFF !important;
+    background:#2C4837 !important;
+    border-left:3px solid #88D4A0 !important;
+    border-top:1px solid #365641 !important;
+    border-right:1px solid #365641 !important;
+    border-bottom:1px solid #365641 !important;
+    font-weight:700 !important;
+    padding-left:10px !important;
+}
+[data-testid="stSidebar"] .stButton > button:focus-visible {
+    outline:2px solid #A7DEA9 !important;
+    outline-offset:2px !important;
+}
+/* ── Always-visible, compact data controls above page content ── */
+.ba-data-toolbar-label {
+    color:#6D8073;
+    font-size:.62rem;
+    font-weight:800;
+    letter-spacing:.13em;
+    line-height:1.4;
+}
+.ba-data-toolbar-status {
+    margin-top:1px;
+    color:#244634;
+    font-size:.96rem;
+    line-height:1.3;
+    font-weight:760;
+    white-space:normal;
+}
+.ba-data-toolbar-status span {
+    font-weight:480;
+    color:#718175;
+    font-size:.82rem;
+}
+[data-testid="stVerticalBlockBorderWrapper"]:has(.ba-data-toolbar-label) {
+    border-radius:12px !important;
+    border:1px solid #E0E9DE !important;
+    background:#FFFFFF !important;
+    box-shadow:none !important;
+}
+[data-testid="stPopover"] button {
+    width:100%;
+    min-height:37px !important;
+    padding:8px 11px !important;
+    background:#F5F8F3 !important;
+    color:#214934 !important;
+    border:1px solid #D7E4D9 !important;
+    border-radius:9px !important;
+    font-size:.84rem;
+    font-weight:650;
+}
+[data-testid="stPopover"] button:hover {
+    background:#E8F2E8 !important;
+    border-color:#A1C9AD !important;
+}
+[data-testid="stPopover"] button:focus-visible {
+    outline:2px solid #75A98B !important;
+    outline-offset:2px;
+}
+@media(max-width:860px) {
+    section[data-testid="stSidebar"],
+    [data-testid="stSidebar"] {
+        width:208px !important;
+        min-width:208px !important;
+        max-width:208px !important;
+    }
+    [data-testid="stSidebarUserContent"] { padding:12px 10px !important; }
+    .ba-data-toolbar-status {font-size:.86rem;}
+}
+
 </style>
 """
 
