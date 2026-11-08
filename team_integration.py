@@ -374,7 +374,16 @@ def render_action_lab(clean_df: pd.DataFrame) -> None:
 @st.cache_data(show_spinner=False, ttl=3600, max_entries=6)
 def _pdf_feedback_counts(voice_df: pd.DataFrame) -> tuple[pd.Series, int]:
     """Cache the same keyword coding used by Participant Voices."""
-    result = analyze_feedback(voice_df)
+    # Person 3's analyzer expects row IDs, but direct report integrations
+    # may supply only feedback columns. Local temporary row numbers allow
+    # aggregate coding without persisting or exporting invented identities.
+    frame = voice_df.copy()
+    if "id" not in frame.columns:
+        frame["id"] = range(1, len(frame) + 1)
+    for key in ("valuable_feedback", "improvement_feedback"):
+        if key not in frame.columns:
+            frame[key] = pd.NA
+    result = analyze_feedback(frame)
     skip = {
         "Other", "Too brief to code",
         "Positive / nothing to change",
