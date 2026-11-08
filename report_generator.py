@@ -241,7 +241,7 @@ def generate_report(metrics, findings, selected_interventions):
     elif metrics.get("responses_verified"):
         resp_text = "%s (verified)" % n_resp
     else:
-        resp_text = "%s (NOT verified)" % n_resp
+        resp_text = "%s (not independently verified)" % n_resp
     cover_rows = [
         ["Item", "Details"],
         ["Generated", datetime.date.today().strftime("%B %d, %Y")],
@@ -320,14 +320,21 @@ def generate_report(metrics, findings, selected_interventions):
     validated = [t for t in themes if t.get("validated")]
     pending = len(themes) - len(validated)
     if validated:
-        rows = [["Validated theme", "Count", "Out of"]]
+        rows = [["Validated theme", "Mentions", "Comment responses"]]
         for t in validated:
             rows.append([str(t.get("theme") or NA), _fmt(t.get("count")), _fmt(t.get("denominator"))])
         story.append(_table(rows, [width * 0.6, width * 0.2, width * 0.2]))
-    else:
-        story.append(_p("No validated comment themes were supplied.", S_BODY))
     if pending > 0:
-        story.append(_p("%d theme(s) are still awaiting manual validation and are not reported." % pending, S_NOTE))
+        story.append(_p("Preliminary patterns from keyword-classified comments (not independently validated):", S_H2))
+        rows = [["Coded theme", "Mentions", "Comment responses"]]
+        for t in themes:
+            if not t.get("validated"):
+                rows.append([str(t.get("theme") or NA), _fmt(t.get("count")), _fmt(t.get("denominator"))])
+        story.append(_table(rows, [width * 0.6, width * 0.2, width * 0.2]))
+        story.append(_p("These counts are overlapping theme matches. One comment may be counted in multiple themes; "
+                        "mentions are not confirmed experiences or respondent percentages.", S_NOTE))
+    if not validated and not pending:
+        story.append(_p("No comment themes were available for this selection.", S_BODY))
     excerpts = [str(x) for x in (metrics.get("approved_excerpts") or [])]
     if excerpts:
         story.append(_p("Approved, de-identified excerpts:", S_H2))
@@ -337,9 +344,9 @@ def generate_report(metrics, findings, selected_interventions):
 
     # ===== INCLUSIVE ACCESSIBILITY AUDIT =====
     story.append(_p("5. Inclusive accessibility audit", S_H1))
-    story.append(_p("Each dimension is labeled Measured, Indirectly mentioned (comments only), or Unmeasured. "
-                    "Nothing here assumes participants' race, gender, income, immigration status, trauma, stigma, "
-                    "trust, or preferred contact method.", S_BODY))
+    story.append(_p("Dimensions are rated by what the uploaded questionnaire directly asks: "
+                    "Measured (added question), Partially measured, or Unmeasured. "
+                    "A question's presence is not proof of a barrier, survey validity, or a representative answer.", S_BODY))
     status_map = metrics.get("dimension_status") if isinstance(metrics.get("dimension_status"), dict) else {}
     rows = [["Dimension", "Status", "What the survey can establish", "What remains unknown"]]
     for name in DIMENSION_NAMES:
@@ -398,7 +405,7 @@ def generate_report(metrics, findings, selected_interventions):
                 for q in DIMENSIONS[dim]["future_questions"]:
                     story.append(_p("- [%s] %s" % (dim, q), S_SMALL))
     else:
-        story.append(_p("Select actions in the Action Lab to see decision rules here.", S_BODY))
+        story.append(_p("Select improvements in Intervention Planner to include action-specific decision rules here.", S_BODY))
 
     # ===== METHODS AND LIMITATIONS =====
     story.append(_p("8. Methods and limitations", S_H1))
@@ -408,8 +415,8 @@ def generate_report(metrics, findings, selected_interventions):
         "Sample sizes: small groups can give unstable results and should not be over-interpreted.",
         "Observational interpretation: patterns are not proof that the training caused them.",
         "Effort levels are planning estimates, not proven impact or success probabilities.",
-        "The survey does not measure cultural, socioeconomic, communication, trust, or psychological barriers directly.",
-        "Comment themes count only if manually validated.",
+        "Many accessibility dimensions may still be unmeasured; see the current questionnaire audit above.",
+        "Keyword-coded comments are preliminary; overlapping matches do not establish respondent intent.",
     ]
     story += _bullets(limits)
 
