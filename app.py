@@ -438,10 +438,12 @@ def _checklist_filter(label: str, options, state_key: str) -> list[str]:
             )
         selected_now = []
         for index, option in enumerate(available):
+            option_key = _filter_option_key(state_key, index)
+            if option_key not in st.session_state:
+                st.session_state[option_key] = option in selected
             if st.checkbox(
                 option,
-                value=option in selected,
-                key=_filter_option_key(state_key, index),
+                key=option_key,
                 on_change=_sync_filter_choices,
                 args=(state_key, available),
             ):
