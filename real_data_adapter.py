@@ -3,10 +3,6 @@ import re
 
 import pandas as pd
 
-# ---------------------------------------------------------------------------
-# SETTINGS you can change
-# ---------------------------------------------------------------------------
-# Groups with fewer responses than this are called "very small" (a TEAM CHOICE, not a fixed rule).
 SMALL_GROUP_THRESHOLD = 30
 
 # Words in the survey -> numbers. Change here if the team picks a different scale.
