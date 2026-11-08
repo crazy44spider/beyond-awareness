@@ -67,7 +67,7 @@ NAV_LABELS = {
     "Survey Designer": "Survey Designer",
     "Intervention Planner": "Intervention Planner",
     "Reports": "Reports",
-    "Detailed Analysis": "Detailed Analysis",
+    "Detailed Analysis": "Data Explorer",
 }
 
 MODULES = {
@@ -523,17 +523,13 @@ def main():
         '</div>',
         unsafe_allow_html=True,
     )
-    st.sidebar.markdown(
-        '<div class="ba-nav-section">WORKSPACE</div>',
-        unsafe_allow_html=True,
-    )
     if st.session_state.get("workspace_page") not in PAGES:
         st.session_state["workspace_page"] = "Overview"
 
     for name in PAGES:
         if name == "Detailed Analysis":
             st.sidebar.markdown(
-                '<div class="ba-nav-section ba-nav-secondary">TOOLS</div>',
+                '<div class="ba-nav-separator"></div>',
                 unsafe_allow_html=True,
             )
         st.sidebar.button(
