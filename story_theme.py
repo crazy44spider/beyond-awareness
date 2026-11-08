@@ -492,6 +492,48 @@ button[data-testid="stBaseButton-primary"] {
 [data-testid="stSidebar"] .stButton > button:hover p {
     color:#F7FAF4 !important;
 }
+
+/* The metric's meaning is part of the headline, not a footnote. */
+.ba-gap-result {
+  display:flex; flex-wrap:wrap;
+  align-items:center; gap:14px 28px;
+  padding:24px 26px;
+  background:#FFFFFF;
+  border:1px solid #DDE7DC;
+  border-left:5px solid #287859;
+  border-radius:14px;
+  margin:14px 0 12px;
+}
+.ba-gap-number {
+  font:600 clamp(3.8rem,6.4vw,5.3rem)/1 Georgia,"Times New Roman",serif;
+  color:#153D2B;
+  letter-spacing:-.065em;
+  font-variant-numeric:tabular-nums;
+  flex:0 0 auto;
+}
+.ba-gap-definition {
+  color:#254B36;
+  font-weight:730;
+  line-height:1.3;
+  font-size:clamp(1rem,1.65vw,1.28rem);
+  flex:1 1 270px;
+  max-width:630px;
+}
+.ba-definition-note {
+  border-radius:10px;
+  background:#EBF3E9;
+  color:#365846;
+  font-size:.89rem;
+  line-height:1.6;
+  padding:14px 18px;
+  margin:12px 0 18px;
+}
+.ba-definition-note b {color:#184532;}
+@media(max-width:650px) {
+ .ba-gap-result {padding:18px;gap:8px;}
+ .ba-gap-number {font-size:3.65rem;}
+}
+
 /* Numbers-only reference screen: compact, legible evidence tables. */
 .ba-data-explorer-head {
   border-bottom:1px solid #DBE6DA;
