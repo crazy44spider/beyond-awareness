@@ -839,18 +839,27 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
         graph_rows = rows[:-1]
         fig = go.Figure()
         fig.add_bar(
-            name="Recalled before", x=[r["Topic"] for r in graph_rows],
-            y=[r["Recalled before"] for r in graph_rows],
-            marker_color=BARK,
+            name="Recalled before",
+            x=[r["Recalled before"] for r in graph_rows],
+            y=[r["Topic"] for r in graph_rows],
+            orientation="h", marker_color=BARK,
+            text=[f'{r["Recalled before"]:.2f}' for r in graph_rows],
+            textposition="outside",
+            hovertemplate="%{y}: %{x:.2f}/5<extra>Recalled before</extra>",
         )
         fig.add_bar(
-            name="Current", x=[r["Topic"] for r in graph_rows],
-            y=[r["Current"] for r in graph_rows],
-            marker_color=JADE,
+            name="Current",
+            x=[r["Current"] for r in graph_rows],
+            y=[r["Topic"] for r in graph_rows],
+            orientation="h", marker_color=JADE,
+            text=[f'{r["Current"]:.2f}' for r in graph_rows],
+            textposition="outside",
+            hovertemplate="%{y}: %{x:.2f}/5<extra>Current</extra>",
         )
-        fig.update_layout(barmode="group")
-        fig.update_yaxes(range=[0, 5], title="Mean rating (1–5)")
-        _plot(fig, "explorer_knowledge_chart", height=335)
+        fig.update_layout(barmode="group", uniformtext=dict(minsize=11, mode="hide"))
+        fig.update_xaxes(range=[0, 5.7], title="Average knowledge rating (1–5)", dtick=1)
+        fig.update_yaxes(autorange="reversed", showgrid=False)
+        _plot(fig, "explorer_knowledge_chart", height=340, left=205)
         st.caption("Exact paired sample sizes and values")
         st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
         st.caption("Retrospective self-report. Each topic has its own matched sample; "
@@ -882,9 +891,9 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
             marker_color=JADE,
         ))
         fig.update_layout(showlegend=False)
-        fig.update_xaxes(title="Response score", type="category")
-        fig.update_yaxes(title="Responses", rangemode="tozero")
-        _plot(fig, "explorer_rating_chart", height=290)
+        fig.update_xaxes(title="Rating selected", type="category")
+        fig.update_yaxes(title="Number of survey responses", rangemode="tozero")
+        _plot(fig, "explorer_rating_chart", height=320, left=70)
         st.markdown("#### Exact score counts")
         st.dataframe(
             pd.DataFrame([
@@ -939,9 +948,11 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
                 orientation="h", marker_color=JADE,
             ))
             fig.update_layout(showlegend=False)
-            fig.update_yaxes(autorange="reversed")
-            fig.update_xaxes(title="Survey rows", rangemode="tozero")
-            _plot(fig, "explorer_participation_chart", height=max(260, len(top)*34+85), left=120)
+            fig.update_yaxes(autorange="reversed", showgrid=False)
+            fig.update_xaxes(title="Survey responses", rangemode="tozero")
+            label_width = min(290, max(150, max(len(str(x)) for x in top[cat])*7 + 30))
+            _plot(fig, "explorer_participation_chart",
+                  height=max(290, len(top)*40+110), left=label_width)
             st.caption("Exact counts and coverage")
             st.dataframe(frame, hide_index=True, width="stretch")
         st.caption("Counts describe survey rows, not population representation. "
@@ -968,13 +979,26 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
             }
             for item in summary["missingness"]
         ])
-        top = frame.sort_values("Blank", ascending=False).head(12)
+        top = (
+            frame.assign(unusable=frame["Blank"] + frame["Invalid"])
+            .sort_values("unusable", ascending=False).head(12)
+        )
         fig = go.Figure()
-        fig.add_bar(name="Blank", x=top["Question"], y=top["Blank"], marker_color=BARK)
-        fig.add_bar(name="Invalid", x=top["Question"], y=top["Invalid"], marker_color=JADE)
+        fig.add_bar(
+            name="Blank", x=top["Blank"], y=top["Question"],
+            orientation="h", marker_color=BARK,
+            hovertemplate="%{y}<br>%{x} blank<extra></extra>",
+        )
+        fig.add_bar(
+            name="Invalid / unusable", x=top["Invalid"], y=top["Question"],
+            orientation="h", marker_color=JADE,
+            hovertemplate="%{y}<br>%{x} invalid<extra></extra>",
+        )
         fig.update_layout(barmode="stack")
-        fig.update_yaxes(title="Missing or invalid answers", rangemode="tozero")
-        _plot(fig, "explorer_coverage_chart", height=340)
+        fig.update_yaxes(autorange="reversed", showgrid=False)
+        fig.update_xaxes(title="Survey responses without a usable answer", rangemode="tozero")
+        _plot(fig, "explorer_coverage_chart",
+              height=max(390, len(top)*40+110), left=260)
         st.caption("Exact answer coverage")
         st.dataframe(frame, hide_index=True, width="stretch")
         st.caption("Blank and invalid answers are reported separately. Neither implies reluctance.")
@@ -1018,7 +1042,9 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
                 ))
                 fig.update_layout(showlegend=False)
                 fig.update_xaxes(title="Mean rating change (points)")
-                _plot(fig, "explorer_comparison_chart", height=max(260, len(chart_frame)*32+90), left=120)
+                label_width = min(290, max(150, max(len(str(x)) for x in chart_frame["Group"])*7 + 30))
+                _plot(fig, "explorer_comparison_chart",
+                      height=max(280, len(chart_frame)*40+110), left=label_width)
             else:
                 st.info("No group meets the minimum paired-response threshold for this topic.")
             st.caption("Exact group comparisons, with suppressed means left blank")
