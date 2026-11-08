@@ -372,11 +372,21 @@ def select_source():
         try:
             with st.spinner("Loading survey responses…"):
                 result = run_pipeline(source)
-        except Exception:
-            st.error(
-                "Could not read the workbook. Check for a 'Survey Data' sheet "
-                "and the expected 20 survey columns."
+        except Exception as exc:
+            st.error("The workbook could not be loaded or analyzed.")
+            st.caption(
+                "This version accepts the original 20 survey columns PLUS "
+                "additional follow-up question columns. A validation or "
+                "processing error—not merely the presence of new questions—"
+                "prevented this upload."
             )
+            with st.expander("Error details for troubleshooting"):
+                st.code(f"{type(exc).__name__}: {exc}")
+                st.caption(
+                    "If your 22-column fictional workbook reports unexpected "
+                    "columns, check that you are running "
+                    "batch3-evidence-survey-designer-nov8 and restart Streamlit."
+                )
             st.stop()
         st.session_state["uploaded_result"] = result
         st.session_state["upload_token"] = token
