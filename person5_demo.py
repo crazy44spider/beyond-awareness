@@ -25,6 +25,7 @@ import streamlit as st
 
 from intervention_planner import (CATALOG_ORDER, DIMENSION_NAMES, build_action_plan, evidence_text,
                                   get_dimension_info, get_intervention, recommend_interventions)
+from real_data_adapter import load_and_build
 from report_generator import generate_report
 from sample_findings import get_synthetic_findings, get_synthetic_metrics
 
@@ -76,13 +77,50 @@ def clear_selection():
 # ---------------------------------------------------------------------------
 # Sidebar: choose where the findings come from
 # ---------------------------------------------------------------------------
+def parse_findings_json(uploaded_file):
+    """Read a findings .json file. Returns (findings list, metrics dict). Raises ValueError if the shape is wrong."""
+    loaded = json.load(uploaded_file)
+    if isinstance(loaded, list):
+        return loaded, {}
+    if isinstance(loaded, dict):
+        return loaded.get("findings", []), loaded.get("metrics", {})
+    raise ValueError("JSON must be a list of findings or an object with a 'findings' key.")
+
+
 st.sidebar.header("Data source")
-source_choice = st.sidebar.radio("Findings to use", ["Synthetic demo findings", "Upload findings JSON"])
+source_choice = st.sidebar.radio(
+    "Findings to use", ["Synthetic demo findings", "Real survey CSV", "Upload findings JSON"])
 
 findings = get_synthetic_findings()
 metrics = get_synthetic_metrics()
+real_summary = None
 
-if source_choice == "Upload findings JSON":
+if source_choice == "Real survey CSV":
+    st.sidebar.caption("The file is read in memory only. It is NOT saved or uploaded anywhere. "
+                       "Never commit the CSV to GitHub.")
+    csv_file = st.sidebar.file_uploader("Survey CSV", type=["csv"])
+    findings, metrics = [], {}
+    if csv_file is None:
+        st.sidebar.info("Upload the survey CSV to build real descriptive findings.")
+    else:
+        try:
+            findings, metrics, real_summary = load_and_build(csv_file)
+        except Exception as error:   # friendly message instead of a crash
+            st.sidebar.error("Could not read the survey CSV: %s" % error)
+            findings, metrics, real_summary = [], {}, None
+        # Optional: add the teammates' findings (gap detector, feedback analyzer, accessibility audit)
+        st.sidebar.caption("Optional: add your teammates' findings (JSON) to the real ones.")
+        extra_file = st.sidebar.file_uploader("Teammates' findings JSON (optional)", type=["json"], key="extra_json")
+        if extra_file is not None:
+            try:
+                extra_findings, extra_metrics = parse_findings_json(extra_file)
+                findings = list(findings) + list(extra_findings)
+                if isinstance(extra_metrics, dict):
+                    metrics = dict(metrics, **extra_metrics)   # teammates' metrics win when keys overlap
+            except Exception as error:
+                st.sidebar.error("Could not read that JSON: %s" % error)
+
+elif source_choice == "Upload findings JSON":
     st.sidebar.caption(
         "Upload a .json file: either a list of findings, or an object like "
         '{"findings": [...], "metrics": {...}}. Use the same fields as sample_findings.py.'
@@ -90,13 +128,7 @@ if source_choice == "Upload findings JSON":
     uploaded = st.sidebar.file_uploader("Findings JSON", type=["json"])
     if uploaded is not None:
         try:
-            loaded = json.load(uploaded)
-            if isinstance(loaded, list):
-                findings, metrics = loaded, {}
-            elif isinstance(loaded, dict):
-                findings, metrics = loaded.get("findings", []), loaded.get("metrics", {})
-            else:
-                raise ValueError("JSON must be a list or an object.")
+            findings, metrics = parse_findings_json(uploaded)
         except Exception as error:  # show a friendly message instead of crashing
             st.sidebar.error("Could not read that file: %s" % error)
             findings, metrics = [], {}
@@ -120,6 +152,18 @@ st.title("Beyond Awareness - Action Lab")
 st.caption("Turn survey findings into training improvements and a plan for checking whether they work.")
 if is_demo:
     st.markdown('<div class="demo-banner">%s</div>' % DEMO_BANNER, unsafe_allow_html=True)
+
+if real_summary:
+    st.info("REAL DATA: descriptive counts from the uploaded CSV. Knowledge/call-intent gaps and comment themes "
+            "come from teammates' modules and are not included unless you add their JSON.")
+    with st.expander("Real data summary (aggregate counts only)"):
+        st.write("Rows:", real_summary["n_rows"])
+        st.write("Counties:", real_summary["counties"])
+        st.write("Roles (people can pick more than one):", real_summary["roles"])
+        st.write("Languages:", real_summary["languages"])
+        st.write("Call-intent answers by month:", real_summary["call_intent_by_month"])
+        for note in real_summary["notes"]:
+            st.caption(note)
 
 if not finding_ids:
     st.info("There are no findings to show yet. Choose the synthetic demo or upload a findings JSON file.")
@@ -173,7 +217,7 @@ with tab1:
     c1.metric("Responses (count / denominator)",
               "%s / %s" % (count, denom) if count is not None and denom is not None else "Not available")
     c2.metric("Percentage", "%.1f%%" % pct if pct is not None else "Not available")
-    c3.metric("Evidence status", finding["status"].capitalize())
+    c3.metric("Evidence status", finding["status"].replace("_", " ").capitalize())
     st.write(finding["description"] or "No description.")
     st.caption("Limitations: " + ("; ".join(finding["limitations"]) if finding["limitations"] else "None listed"))
 

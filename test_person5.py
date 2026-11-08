@@ -168,6 +168,96 @@ def test_real_data_has_no_demo_banner():
     assert "SYNTHETIC DEMONSTRATION" not in text
 
 
+# ---------------- real data adapter (uses a tiny FAKE spreadsheet, never the real CSV) ----------------
+def _mini_survey():
+    """A 6-row fake survey that copies the real column layout, including messy values."""
+    import pandas as pd
+    cur = "Please tell us how much you disagree or agree with the statements..I %s."
+    bef = "Now think back to before you took part in the Understanding 988 training.\xa0\xa0.I %s."
+    rows = {
+        "Id": [1, 2, 3, 4, 5, 6],
+        "Start time": ["2025-10-21 10:00:00"] * 3 + ["2026-05-02 10:00:00"] * 3,
+        "Language": ["English (United States)\u200e"] * 5 + ["Espa\u00f1ol (M\u00e9xico)\u200e"],
+        "Are you a....?": ["Student", "School staff member;", "Student", "Caregiver/parent;Student", "Student", "Student"],
+        "Please enter the date of your training.": ["2025-10-21"] * 5 + [None],
+        "Which county is this training affiliated with?\xa0": ["Montgomery County with NAMI MC", "Anne Arundel",
+                                                             "Anne Arundel ", "Fairfax county", "Anne Arundel", "Harris"],
+        cur % "can identify mental health challenges and crises": ["Strongly agree ", "Agree", "Agree", "Disagree", "Agree", "Agree"],
+        cur % "can describe 988 and how it works": ["Agree"] * 6,
+        cur % "know when to use 988": ["Agree"] * 6,
+        bef % "could identify mental health challenges and crises": ["Agree", "Disagree", "Agree", "Disagree", "Agree", None],
+        bef % "could describe 988 and how it works": ["Disagree"] * 6,
+        bef % "knew when to use 988": ["Disagree"] * 6,
+        "How likely are you to call 988 if you or someone else is experiencing a mental health challenge or crisis?":
+            [None, None, None, 7, 3, None],
+        "What was the most valuable thing you learned during the training?\xa0": ["SECRET COMMENT ONE"] * 6,
+        "How can we improve this training in the future?": ["SECRET COMMENT TWO"] * 6,
+    }
+    return pd.DataFrame(rows)
+
+
+def test_adapter_numbers_are_correct():
+    from real_data_adapter import build_real_inputs
+    findings, metrics, summary = build_real_inputs(_mini_survey())
+    assert metrics["n_responses"] == 6 and metrics["responses_verified"] is True
+    assert metrics["call_intent"] == {"n_answered": 2, "n_total": 6}
+    first = metrics["knowledge"][0]                       # paired rows = 5 (row 6 has no 'before')
+    assert first["n_paired"] == 5
+    assert first["current_mean"] == 3.8 and first["before_mean"] == 3.2   # (5+4+4+2+4)/5 and (4+2+4+2+4)/5
+    assert summary["counties"]["Montgomery"] == 1 and summary["counties"]["Anne Arundel"] == 3
+    assert summary["counties"]["Fairfax"] == 1 and summary["counties"]["Other / unclear"] == 1
+    assert summary["languages"]["Espa\u00f1ol (M\u00e9xico)"] == 1     # hidden characters removed
+    # months with fewer than 5 rows are NOT flagged as "no answers" (too few rows to say anything)
+    assert "no answers at all" not in " ".join(findings[0]["limitations"])
+
+
+def test_adapter_findings_are_valid_and_safe():
+    import json
+    from real_data_adapter import build_real_inputs
+    findings, metrics, summary = build_real_inputs(_mini_survey())
+    for f in findings:
+        assert f["type"] in FINDING_TYPE_MAP, f["type"]            # every type is recognized by the planner
+        assert f["status"] != "synthetic"
+    json.dumps(findings), json.dumps(metrics)                      # plain python types only
+    everything = json.dumps([findings, metrics, summary])
+    assert "SECRET COMMENT" not in everything                      # no open-ended comments leak out
+    result = recommend_interventions(findings)
+    assert result["recommendations"] and not result["needs_review"]
+
+
+def test_adapter_missing_columns_do_not_crash():
+    import pandas as pd
+    from real_data_adapter import build_real_inputs
+    findings, metrics, summary = build_real_inputs(pd.DataFrame({"Id": [1, 2], "Something else": ["a", "b"]}))
+    assert metrics["n_responses"] == 2 and metrics["knowledge"] == []
+    assert metrics["call_intent"]["n_answered"] is None            # missing stays missing, not 0
+    assert _is_pdf(generate_report(metrics, findings, ["myth_vs_reality"]))
+
+
+def test_adapter_empty_file_gives_clear_error():
+    import pandas as pd
+    from real_data_adapter import build_real_inputs
+    try:
+        build_real_inputs(pd.DataFrame())
+    except ValueError as error:
+        assert "no rows" in str(error)
+    else:
+        raise AssertionError("expected ValueError")
+
+
+def test_pdf_with_real_style_inputs_has_no_demo_banner():
+    from real_data_adapter import build_real_inputs
+    findings, metrics, _ = build_real_inputs(_mini_survey())
+    data = generate_report(metrics, findings, ["survey_design_fix", "collect_more_evidence"])
+    assert _is_pdf(data)
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        return
+    text = " ".join(p.extract_text() for p in PdfReader(io.BytesIO(data)).pages)
+    assert "SYNTHETIC DEMONSTRATION" not in text and "Real data" in text
+
+
 # ---------------- no streamlit in the logic modules ----------------
 def test_logic_modules_do_not_import_streamlit():
     code = ("import sys, intervention_planner, report_generator, sample_findings; "
