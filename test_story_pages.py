@@ -66,6 +66,23 @@ class StoryPresentationTests(unittest.TestCase):
             self.assertIs(fig.layout.yaxis.fixedrange, True)
             self.assertIs(fig.layout.dragmode, False)
 
+    def test_checkbox_filters_keep_existing_selection_contract(self):
+        from app import _set_filter_choices, _sync_filter_choices, _filter_option_key
+        state = {}
+        options = ["Fairfax", "Montgomery", "Prince George's"]
+        with patch("app.st.session_state", state):
+            _set_filter_choices("filter_counties", options, True)
+            self.assertEqual(state["filter_counties"], options)
+            self.assertTrue(state[_filter_option_key("filter_counties", 2)])
+            state[_filter_option_key("filter_counties", 1)] = False
+            _sync_filter_choices("filter_counties", options)
+            self.assertEqual(
+                state["filter_counties"], ["Fairfax", "Prince George's"]
+            )
+            _set_filter_choices("filter_counties", options, False)
+            self.assertEqual(state["filter_counties"], [])
+            self.assertFalse(state[_filter_option_key("filter_counties", 0)])
+
     def test_html_is_escaped_in_custom_cards(self):
         self.assertEqual(esc("<script>"), "&lt;script&gt;")
 
