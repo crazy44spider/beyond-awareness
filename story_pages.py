@@ -256,20 +256,28 @@ def render_training_outcomes(clean_df: pd.DataFrame, summary: dict) -> None:
     )
     _plot(fig, "story_learning_dumbbell", height=330, left=185)
 
-    improved = [label for label, item in usable
-                if float(item["after_mean"]) > float(item["before_mean"])]
+    improved = [
+        (label, item) for label, item in usable
+        if float(item["after_mean"]) > float(item["before_mean"])
+    ]
     if improved:
+        strongest_name, strongest = max(
+            improved, key=lambda pair: float(pair[1]["mean_change"])
+        )
+        largest = translated.get(strongest_name, strongest_name).lower()
         takeaway(
-            f"Higher current ratings in {len(improved)} of {len(usable)} topics.",
-            "Only matched recalled-before and current ratings enter each comparison. "
-            "An observed difference is not evidence of a causal effect.",
-            label="HOW TO READ IT",
+            f"Largest reported difference: {largest} "
+            f"(+{float(strongest['mean_change']):.2f} points).",
+            f"Based on {int(strongest['n']):,} paired responses on the 1–5 agreement scale. "
+            "These are recalled-before versus current self-ratings, not causal proof.",
+            label="KEY FINDING",
         )
     else:
         takeaway(
-            "The displayed topics do not show higher current averages.",
-            "Inspect paired responses before concluding anything about training effects.",
-            label="HOW TO READ IT",
+            "No knowledge topic has a higher current average.",
+            "Only matched before/current ratings are compared. "
+            "A reported difference cannot establish a causal effect.",
+            label="KEY FINDING",
         )
 
     st.caption(
@@ -836,30 +844,36 @@ def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dic
             "Change": overall["mean_change"],
             "Incomplete pairs": overall["missing_pair_rows"],
         })
-        graph_rows = rows[:-1]
-        fig = go.Figure()
-        fig.add_bar(
-            name="Recalled before",
-            x=[r["Recalled before"] for r in graph_rows],
-            y=[r["Topic"] for r in graph_rows],
-            orientation="h", marker_color=BARK,
-            text=[f'{r["Recalled before"]:.2f}' for r in graph_rows],
-            textposition="outside",
-            hovertemplate="%{y}: %{x:.2f}/5<extra>Recalled before</extra>",
-        )
-        fig.add_bar(
-            name="Current",
-            x=[r["Current"] for r in graph_rows],
-            y=[r["Topic"] for r in graph_rows],
-            orientation="h", marker_color=JADE,
-            text=[f'{r["Current"]:.2f}' for r in graph_rows],
-            textposition="outside",
-            hovertemplate="%{y}: %{x:.2f}/5<extra>Current</extra>",
-        )
-        fig.update_layout(barmode="group", uniformtext=dict(minsize=11, mode="hide"))
-        fig.update_xaxes(range=[0, 5.7], title="Average knowledge rating (1–5)", dtick=1)
-        fig.update_yaxes(autorange="reversed", showgrid=False)
-        _plot(fig, "explorer_knowledge_chart", height=340, left=205)
+        graph_rows = [
+            r for r in rows[:-1]
+            if r["Recalled before"] is not None and r["Current"] is not None
+        ]
+        if graph_rows:
+            fig = go.Figure()
+            fig.add_bar(
+                name="Recalled before",
+                x=[r["Recalled before"] for r in graph_rows],
+                y=[r["Topic"] for r in graph_rows],
+                orientation="h", marker_color=BARK,
+                text=[f'{r["Recalled before"]:.2f}' for r in graph_rows],
+                textposition="outside",
+                hovertemplate="%{y}: %{x:.2f}/5<extra>Recalled before</extra>",
+            )
+            fig.add_bar(
+                name="Current",
+                x=[r["Current"] for r in graph_rows],
+                y=[r["Topic"] for r in graph_rows],
+                orientation="h", marker_color=JADE,
+                text=[f'{r["Current"]:.2f}' for r in graph_rows],
+                textposition="outside",
+                hovertemplate="%{y}: %{x:.2f}/5<extra>Current</extra>",
+            )
+            fig.update_layout(barmode="group", uniformtext=dict(minsize=11, mode="hide"))
+            fig.update_xaxes(range=[0, 5.7], title="Average knowledge rating (1–5)", dtick=1)
+            fig.update_yaxes(autorange="reversed", showgrid=False)
+            _plot(fig, "explorer_knowledge_chart", height=340, left=205)
+        else:
+            st.info("No matched knowledge ratings are available in this selection.")
         st.caption("Exact paired sample sizes and values")
         st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
         st.caption("Retrospective self-report. Each topic has its own matched sample; "
