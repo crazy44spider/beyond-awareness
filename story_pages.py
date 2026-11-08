@@ -64,28 +64,65 @@ def _short_num(value: Any, digits: int = 1) -> str:
     return f"{float(value):.{digits}f}"
 
 
-def _plot(fig: go.Figure, key: str, *, height: int = 300, left: int = 24) -> None:
-    """Compact readable charts. Horizontal labels are never placed below the fold."""
+def _lock_figure(fig: go.Figure) -> go.Figure:
+    """Keep hover readouts; prevent zoom, pan, axis editing and legend hiding.
+
+    Plotly's hidden modebar alone does not lock navigation, and a legend
+    click can otherwise make an entire dataset appear to disappear.
+    """
+    fig.update_layout(
+        dragmode=False,
+        clickmode="none",
+        legend=dict(itemclick=False, itemdoubleclick=False),
+    )
+    fig.update_xaxes(fixedrange=True)
+    fig.update_yaxes(fixedrange=True)
+    return fig
+
+
+PLOT_CONFIG = {
+    "displaylogo": False,
+    "displayModeBar": False,
+    "scrollZoom": False,
+    "doubleClick": False,
+    "editable": False,
+    "showAxisDragHandles": False,
+    "showAxisRangeEntryBoxes": False,
+    "responsive": True,
+}
+
+
+def _plot(fig: go.Figure, key: str, *, height: int = 320, left: int = 60) -> None:
+    """A full-width, non-editable chart with readable axes and useful tooltips."""
+    visible_legend = (
+        bool(fig.layout.showlegend) if fig.layout.showlegend is not None
+        else (
+            any(trace.showlegend is True for trace in fig.data)
+            or sum(bool(trace.name) and trace.showlegend is not False
+                   for trace in fig.data) > 1
+        )
+    )
     fig.update_layout(
         template="plotly_white",
-        font=dict(family="Arial, sans-serif", size=12, color=INK),
+        font=dict(family="Arial, sans-serif", size=13, color=INK),
         paper_bgcolor="#FFFFFF",
         plot_bgcolor="#FFFFFF",
-        margin=dict(l=left, r=22, t=30, b=38),
+        colorway=[JADE, BARK, "#91B59A", "#D5BA96"],
+        margin=dict(l=left, r=30, t=63 if visible_legend else 28, b=54),
         height=height,
-        showlegend=True,
+        showlegend=visible_legend,
         legend=dict(
-            orientation="h", y=1.13, x=0,
-            bgcolor="rgba(0,0,0,0)", font=dict(size=11),
+            orientation="h", y=1.16, x=0,
+            bgcolor="rgba(0,0,0,0)", font=dict(size=12),
         ),
         hovermode="closest",
+        hoverlabel=dict(bgcolor="#F7F8F2", font=dict(color=INK, size=12)),
+        bargap=.25,
     )
-    fig.update_xaxes(gridcolor=GRID, zerolinecolor=GRID)
-    fig.update_yaxes(gridcolor=GRID, zerolinecolor=GRID)
-    st.plotly_chart(
-        fig, key=key, width="stretch", theme=None,
-        config={"displaylogo": False, "displayModeBar": False, "responsive": True},
-    )
+    fig.update_xaxes(gridcolor=GRID, zerolinecolor=GRID, automargin=True)
+    fig.update_yaxes(gridcolor=GRID, zerolinecolor=GRID, automargin=True)
+    _lock_figure(fig)
+    st.plotly_chart(fig, key=key, width="stretch", theme=None, config=PLOT_CONFIG)
 
 
 def render_overview(clean_df: pd.DataFrame, summary: dict, source_label: str) -> None:
@@ -106,7 +143,7 @@ def render_overview(clean_df: pd.DataFrame, summary: dict, source_label: str) ->
 
     kpis([
         ("Responses included", f"{n:,}", "Current survey selection"),
-        ("Answered the call question", _pct(rate), f"{answered:,} answered; {missing:,} missing or invalid"),
+        ("Answered the willingness-to-call question", _pct(rate), f"{answered:,} of {n:,} responded; {missing:,} missing or invalid"),
     ])
 
     knowledge = summary["knowledge"]["topics"]
