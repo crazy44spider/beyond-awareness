@@ -10,6 +10,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from ui_styles import inject_styles, intro, stat_cards, focus_card
+
 PURPLE = "#8064B3"
 TEAL = "#148A83"
 AMBER = "#A96509"
@@ -50,25 +52,22 @@ def number(value, signed=False):
 
 
 def style_app():
-    """Keep native theme colors so browser dark/light preferences stay readable."""
-    st.markdown("""<style>
-    [data-testid="stMetric"] {border: 1px solid rgba(128, 128, 128, 0.35);
-       border-radius: 14px; padding: 16px;}
-    .stTabs [data-baseweb="tab"] {font-weight: 600;}
-    </style>""", unsafe_allow_html=True)
+    """Install the shared accessible, light-colored app theme."""
+    inject_styles()
 
 
 def _chart(fig, key, *, percent_axis=False, height=330):
     fig.update_layout(
-        template=None, font=dict(family="Arial, sans-serif", size=14),
+        template=None, font=dict(family="Segoe UI, Arial, sans-serif", size=13, color="#514463"),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=12, r=12, t=24, b=12),
         legend=dict(orientation="h", y=1.16, x=0),
         height=height, hovermode="closest",
+        colorway=["#7452BC", "#2D897F", "#E4A46C"],
     )
     if percent_axis:
         fig.update_yaxes(range=[0, 100], title="Share of valid paired responses (%)")
-    st.plotly_chart(fig, width="stretch", theme="streamlit", key=key, config={"displaylogo": False})
+    st.plotly_chart(fig, width="stretch", theme=None, key=key, config={"displaylogo": False, "displayModeBar": False})
 
 
 def _bar(records, category, value, *, x_title, color=PURPLE, horizontal=False):
@@ -88,34 +87,125 @@ def _bar(records, category, value, *, x_title, color=PURPLE, horizontal=False):
 
 
 def render_overview(summary):
+    """Lead with the story and the survey's blind spots; retain details below."""
     overview = summary["overview"]
-    cols = st.columns(3)
-    for col, label, value in zip(cols, ["Survey rows", "Training dates", "Fully paired knowledge rows"],
-                                 [overview["survey_rows"], overview["distinct_training_dates"], overview["fully_paired_knowledge_rows"]]):
-        col.metric(label, f"{value:,}")
-    cols = st.columns(3)
-    cols[0].metric("Willingness answer coverage", percent(overview["willingness_response_rate"]))
-    cols[1].metric("Training counties", overview["county_count"])
-    cols[2].metric("Role categories", overview["role_category_count"])
-    st.caption(
-        f"All cards use the current selection: {overview['survey_rows']:,} rows. "
-        f"Willingness: {overview['willingness_valid_n']:,} valid answers; "
-        f"{overview['willingness_missing_or_invalid_n']:,} missing or invalid. "
-        "Survey rows and distinct IDs do not establish unique individuals."
+    n = int(overview["survey_rows"])
+    knowledge = summary["knowledge"]["topics"]
+    positive = sum(
+        1 for stats in knowledge.values()
+        if stats["n"] > 0 and stats["mean_change"] is not None
+        and stats["mean_change"] > 0
     )
-    st.subheader("Reported knowledge, before and after")
-    records = summary["knowledge"]["topics"]
-    fig = go.Figure()
-    for label, field, color in [("Recalled before", "before_mean", PURPLE), ("Current", "after_mean", TEAL)]:
-        fig.add_bar(name=label, x=list(records), y=[v[field] for v in records.values()], marker_color=color)
-    fig.update_layout(barmode="group")
-    fig.update_yaxes(range=[0, 5], title="Mean coded agreement (1–5)")
-    _chart(fig, "overview_knowledge")
-    sample_text = "; ".join(f"{topic}: n={s['n']}, incomplete={s['missing_pair_rows']}" for topic, s in records.items())
-    st.caption(f"Question: perceived knowledge in each topic. Matched answers per topic. {sample_text}. {TOPIC_LIMIT}")
-    if overview["survey_rows"] < summary["min_group_n"]:
-        st.warning(f"This selection contains fewer than {summary['min_group_n']} rows. Treat descriptive results with caution.")
-    st.info("Representation & measurement: this survey describes who responded. It does not measure population need or prove who faces barriers to using 988.")
+    assessed = sum(1 for stats in knowledge.values() if stats["n"] > 0)
+    response_rate = overview["willingness_response_rate"]
+    missing = int(overview["willingness_missing_or_invalid_n"])
+
+    intro(
+        "THE TRAINING STORY · AT A GLANCE",
+        "A clearer picture of 988 training",
+        "What participants reported learning, where our information stops, and what to explore next.",
+    )
+
+    stat_cards([
+        {
+            "icon": "💜",
+            "tone": "lilac",
+            "label": "Survey responses",
+            "value": f"{n:,}",
+            "detail": "Survey rows, not necessarily unique people",
+        },
+        {
+            "icon": "🌱",
+            "tone": "mint",
+            "label": "Knowledge topics with higher ratings",
+            "value": f"{positive} of {assessed}" if assessed else "Not available",
+            "detail": "Current versus recalled-before responses",
+        },
+        {
+            "icon": "💬",
+            "tone": "peach",
+            "label": "Answered the call-intent question",
+            "value": percent(response_rate),
+            "detail": f"{missing:,} missing or invalid responses",
+        },
+    ])
+
+    st.write("")
+    chart_col, story_col = st.columns([1.6, 1], gap="large")
+
+    with chart_col:
+        st.subheader("What participants say they know")
+        st.caption("Self-rated knowledge, recalled before and rated currently · 1–5 scale")
+        records = list(knowledge.items())
+        if records and any(item["n"] > 0 for _, item in records):
+            fig = go.Figure()
+            labels = [name for name, _ in records]
+            fig.add_bar(
+                name="Recalled before",
+                x=labels,
+                y=[item["before_mean"] for _, item in records],
+                marker_color="#CFC2F0",
+                marker_line_width=0,
+            )
+            fig.add_bar(
+                name="Current",
+                x=labels,
+                y=[item["after_mean"] for _, item in records],
+                marker_color="#7555BE",
+                marker_line_width=0,
+            )
+            fig.update_layout(barmode="group", bargap=.28)
+            fig.update_yaxes(range=[0, 5], title=None, gridcolor="#EEE8F5")
+            fig.update_xaxes(title=None, tickfont=dict(size=11))
+            _chart(fig, "overview_knowledge", height=320)
+        else:
+            st.info("No paired knowledge ratings are available in this selection.")
+
+    with story_col:
+        focus_card(
+            "ONE IMPORTANT BLIND SPOT",
+            "Knowing isn't the same as reaching out",
+            "The survey asks whether people would CALL 988. "
+            "It doesn't ask whether they would rather text or chat, "
+            "or how comfortable they feel asking for help."
+        )
+        st.caption(
+            f"Of {n:,} selected responses, {missing:,} have no usable answer to the call-intent item. "
+            "We cannot interpret blank answers as unwillingness."
+        )
+
+    with st.expander("How were these insights calculated?"):
+        st.write(
+            "Each knowledge comparison uses only responses with both a recalled-before "
+            "and a current rating. A higher average rating is descriptive; it does not "
+            "prove that training caused the change."
+        )
+        table = [
+            {
+                "Topic": topic,
+                "Paired responses": stats["n"],
+                "Recalled-before mean": stats["before_mean"],
+                "Current mean": stats["after_mean"],
+                "Change (points)": stats["mean_change"],
+                "Incomplete pairs": stats["missing_pair_rows"],
+            }
+            for topic, stats in knowledge.items()
+        ]
+        st.dataframe(pd.DataFrame(table), hide_index=True, width="stretch")
+        st.caption(
+            "The call-intent response rate is usable answers divided by all selected rows. "
+            "Missing answers and unusable values are not treated as unwillingness."
+        )
+
+    if n < summary["min_group_n"]:
+        st.warning(
+            f"Only {n} responses match these filters. "
+            f"Comparisons below {summary['min_group_n']} paired responses need extra caution."
+        )
+    st.caption(
+        "Survey answers show what respondents reported—not the needs of every person "
+        "in a community, nor confirmed cultural or practical barriers."
+    )
 
 
 def render_knowledge(summary):
@@ -254,12 +344,29 @@ def render_quality(quality):
 
 def render_dashboard(clean_df, summary):
     if clean_df.empty:
-        st.info("No survey rows match these filters. Clear a filter in the sidebar to continue.")
+        st.info("No survey rows match these filters. Change your filters in the sidebar to see more.")
         return
-    tabs = st.tabs(["Summary", "Knowledge", "Training experience", "Representation", "Answer coverage", "Compare groups"])
-    with tabs[0]: render_overview(summary)
-    with tabs[1]: render_knowledge(summary)
-    with tabs[2]: render_experience(clean_df, summary)
-    with tabs[3]: render_representation(summary)
-    with tabs[4]: render_missingness(summary)
-    with tabs[5]: render_comparisons(summary)
+
+    render_overview(summary)
+
+    # All original views remain available, but are no longer crowded onto
+    # the first screen. This is a display change only; no feature was deleted.
+    with st.expander("Explore detailed analysis · all original charts and tables", expanded=False):
+        tabs = st.tabs([
+            "Knowledge",
+            "Training experience",
+            "Representation",
+            "Answer coverage",
+            "Compare groups",
+        ])
+        with tabs[0]:
+            render_knowledge(summary)
+        with tabs[1]:
+            render_experience(clean_df, summary)
+        with tabs[2]:
+            render_representation(summary)
+        with tabs[3]:
+            render_missingness(summary)
+        with tabs[4]:
+            render_comparisons(summary)
+
