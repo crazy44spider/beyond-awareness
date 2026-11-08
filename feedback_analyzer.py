@@ -1,12 +1,14 @@
-"""
-Participant feedback coding (EveryMind 988 survey).
+"""Theme-code 988 participant feedback from an already cleaned DataFrame.
 
-Reads the survey Excel file, cleans it, translates Spanish comments, redacts
-names, and tags both open-ended questions into themes (multi-label keyword
-coding). Run `python feedback_coding.py` to print the summaries.
-Importing this file does not print anything.
+Importing this module does not load Excel or print respondent comments.
+Call analyze_feedback(clean_df) for the currently filtered survey.
+The optional CLI demo reads a local private survey_data.xlsx only when run directly.
 
-Do NOT commit the data/ folder (raw participant comments).
+Manual ID-keyed Spanish translations are retained below for reference but are
+NOT applied to arbitrary uploaded workbooks: IDs alone cannot safely identify
+the same response across different files. Spanish theme coding is therefore
+incomplete until translations can be matched to verified original text.
+Name redaction is a limited safeguard, not a guarantee of anonymity.
 """
 import re
 from string import capwords
