@@ -112,8 +112,9 @@ def _key(value):
 def validate_schema(raw_df: pd.DataFrame) -> dict:
     """Return a schema report. load_survey/clean_survey raise if invalid.
 
-    Both the verified original headers and the team's exact 20-column contract
-    are accepted. Column order may change. Extra/missing/duplicate headers fail.
+    Both the verified original headers and the team's 20-column contract are
+    accepted. Column order can change. Original 20 columns are mandatory;
+    new follow-up question columns are allowed and kept for coverage auditing.
     """
     if not isinstance(raw_df, pd.DataFrame):
         raise TypeError("Expected a pandas DataFrame.")
@@ -126,13 +127,27 @@ def validate_schema(raw_df: pd.DataFrame) -> dict:
     # Positions avoid echoing arbitrary uploaded headers into public logs.
     unexpected = [i + 1 for i, c in enumerate(resolved) if c is None]
     duplicates = [str(c) for c, n in counts.items() if n > 1]
-    valid = not missing and not unexpected and not duplicates
+    # A later survey may append follow-up questions. The 20 original
+    # fields remain mandatory for comparable numerical analysis; supplementary
+    # fields are retained verbatim for questionnaire-coverage auditing.
+    supplemental = [
+        str(raw_df.columns[i - 1]) for i in unexpected
+    ]
+    reserved = set(EXPECTED_COLUMNS)
+    reserved.update(f"{name}_raw" for name in EXPECTED_COLUMNS)
+    reserved.update({"role_raw", "role_list", "duplicate_id", "paired_all_knowledge"})
+    conflicts = [name for name in supplemental
+                 if name in reserved or name.endswith("_invalid")
+                 or name.startswith("paired_")]
+    valid = not missing and not duplicates and not conflicts
     return {
         "valid": valid,
         "row_count": len(raw_df),
         "column_count": len(raw_df.columns),
         "missing_columns": missing,
         "unexpected_column_positions": unexpected,
+        "supplemental_question_count": len(unexpected),
+        "reserved_column_conflicts": conflicts,
         "duplicate_columns": duplicates,
         "resolved_columns": resolved,
     }
@@ -144,9 +159,10 @@ def _require_schema(raw_df):
         raise ValueError(
             "Survey schema mismatch. "
             f"Missing columns: {report['missing_columns']}; "
-            f"unrecognized column positions: {report['unexpected_column_positions']}; "
-            f"duplicate columns: {report['duplicate_columns']}. "
-            "Expected the 20 survey questions or their shared contract names."
+            f"conflicting supplementary columns: {report['reserved_column_conflicts']}; "
+            f"duplicate core columns: {report['duplicate_columns']}. "
+            "Keep the original 20 required survey fields; additional "
+            "follow-up question columns are accepted."
         )
     return report
 
@@ -154,7 +170,8 @@ def _require_schema(raw_df):
 def load_survey(source, sheet_name="Survey Data") -> pd.DataFrame:
     """Read an Excel path/file-like object, validate it, and retain raw values.
 
-    dtype=object avoids forcing IDs into numeric columns. keep_default_na=False
+    Additional question columns are retained. dtype=object avoids forcing IDs
+    into numeric columns. keep_default_na=False
     preserves literal responses such as 'NA'; actual blanks are handled later.
     A source can be a path, BytesIO, or a Streamlit UploadedFile.
     """
@@ -212,7 +229,10 @@ def clean_survey(raw_df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     """
     schema = _require_schema(raw_df)
     df = raw_df.copy(deep=True)
-    df.columns = schema["resolved_columns"]
+    df.columns = [
+        resolved if resolved is not None else str(original)
+        for original, resolved in zip(raw_df.columns, schema["resolved_columns"])
+    ]
     for column in EXPECTED_COLUMNS:
         df[f"{column}_raw"] = df[column].copy(deep=True)
         df[column] = df[column].map(_text)
