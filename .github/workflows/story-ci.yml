@@ -7,6 +7,8 @@ on:
       - 'app.py'
       - 'story_*.py'
       - 'feedback_analyzer.py'
+      - 'survey_evidence.py'
+      - 'cleaning.py'
       - 'person4/**'
       - 'team_integration.py'
       - 'requirements.txt'
@@ -26,6 +28,6 @@ jobs:
       - name: Syntax check
         run: python -m compileall -q app.py dashboard.py story_theme.py story_pages.py feedback_analyzer.py team_integration.py person4/survey_designer.py
       - name: Run synthetic integration tests
-        run: python -m unittest -v test_story_pages.py test_feedback_integration.py test_team_integration.py
+        run: python -m unittest -v test_story_pages.py test_feedback_integration.py test_team_integration.py test_survey_evolution.py
       - name: Run Person 5 regression tests
         run: python test_person5.py
