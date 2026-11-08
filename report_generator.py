@@ -34,11 +34,12 @@ from intervention_planner import DIMENSIONS, DIMENSION_NAMES, build_action_plan,
 # ---------------------------------------------------------------------------
 # Colors from the brief (change here to restyle the whole PDF)
 # ---------------------------------------------------------------------------
-PURPLE = colors.HexColor("#4B2E83")
-LAVENDER = colors.HexColor("#EDE7F6")
-TEAL = colors.HexColor("#148A83")
-TEXT = colors.HexColor("#222222")
-GRAY = colors.HexColor("#666666")
+FOREST = colors.HexColor("#173D2C")
+PALE = colors.HexColor("#EFF4EC")
+JADE = colors.HexColor("#287859")
+BARK = colors.HexColor("#A17C59")
+TEXT = colors.HexColor("#243B2D")
+GRAY = colors.HexColor("#66786C")
 
 DEMO_BANNER = "SYNTHETIC DEMONSTRATION - NOT EVERYMIND RESULTS"
 NA = "Not available"
@@ -46,10 +47,10 @@ NA = "Not available"
 # ---------------------------------------------------------------------------
 # Text styles
 # ---------------------------------------------------------------------------
-S_TITLE = ParagraphStyle("title", fontName="Helvetica-Bold", fontSize=26, leading=31, textColor=PURPLE, spaceAfter=6)
-S_SUB = ParagraphStyle("sub", fontName="Helvetica", fontSize=13, leading=17, textColor=TEAL, spaceAfter=14)
-S_H1 = ParagraphStyle("h1", fontName="Helvetica-Bold", fontSize=16, leading=20, textColor=PURPLE, spaceBefore=6, spaceAfter=6, keepWithNext=1)
-S_H2 = ParagraphStyle("h2", fontName="Helvetica-Bold", fontSize=12, leading=15, textColor=TEAL, spaceBefore=8, spaceAfter=4, keepWithNext=1)
+S_TITLE = ParagraphStyle("title", fontName="Helvetica-Bold", fontSize=26, leading=31, textColor=FOREST, spaceAfter=6)
+S_SUB = ParagraphStyle("sub", fontName="Helvetica", fontSize=13, leading=17, textColor=JADE, spaceAfter=14)
+S_H1 = ParagraphStyle("h1", fontName="Helvetica-Bold", fontSize=16, leading=20, textColor=FOREST, spaceBefore=6, spaceAfter=6, keepWithNext=1)
+S_H2 = ParagraphStyle("h2", fontName="Helvetica-Bold", fontSize=12, leading=15, textColor=JADE, spaceBefore=8, spaceAfter=4, keepWithNext=1)
 S_BODY = ParagraphStyle("body", fontName="Helvetica", fontSize=10, leading=14, textColor=TEXT, spaceAfter=5)
 S_SMALL = ParagraphStyle("small", fontName="Helvetica", fontSize=8.5, leading=11, textColor=TEXT)
 S_NOTE = ParagraphStyle("note", fontName="Helvetica-Oblique", fontSize=8.5, leading=11, textColor=GRAY, spaceAfter=6)
@@ -83,15 +84,15 @@ def _table(rows, col_widths, header=True):
     table = Table(data, colWidths=col_widths, repeatRows=1 if header else 0)
     style = [
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CFC4E6")),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D7E2D5")),
         ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
         ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]
     if header:
-        style.append(("BACKGROUND", (0, 0), (-1, 0), PURPLE))
+        style.append(("BACKGROUND", (0, 0), (-1, 0), FOREST))
         for i in range(1, len(data)):
             if i % 2 == 0:
-                style.append(("BACKGROUND", (0, i), (-1, i), LAVENDER))
+                style.append(("BACKGROUND", (0, i), (-1, i), PALE))
     table.setStyle(TableStyle(style))
     return table
 
@@ -127,12 +128,12 @@ def _make_page_decorator(demo):
         canvas.saveState()
         width, height = letter
         if demo:
-            canvas.setFillColor(PURPLE)
+            canvas.setFillColor(FOREST)
             canvas.rect(0, height - 0.45 * inch, width, 0.45 * inch, stroke=0, fill=1)
             canvas.setFillColor(colors.white)
             canvas.setFont("Helvetica-Bold", 11)
             canvas.drawCentredString(width / 2, height - 0.3 * inch, DEMO_BANNER)
-        canvas.setStrokeColor(LAVENDER)
+        canvas.setStrokeColor(PALE)
         canvas.line(0.8 * inch, 0.65 * inch, width - 0.8 * inch, 0.65 * inch)
         canvas.setFillColor(GRAY)
         canvas.setFont("Helvetica", 8)
@@ -166,15 +167,15 @@ def _knowledge_chart(rows, scale_max):
     chart.categoryAxis.categoryNames = labels
     chart.valueAxis.valueMin = 0
     chart.valueAxis.valueMax = top
-    chart.bars[0].fillColor = colors.HexColor("#B39DDB")
-    chart.bars[1].fillColor = TEAL
+    chart.bars[0].fillColor = BARK
+    chart.bars[1].fillColor = JADE
     chart.categoryAxis.labels.fontSize = 8
     chart.valueAxis.labels.fontSize = 8
     drawing.add(chart)
     # Simple legend
-    drawing.add(Rect(60, 172, 9, 9, fillColor=colors.HexColor("#B39DDB"), strokeColor=None))
+    drawing.add(Rect(60, 172, 9, 9, fillColor=BARK, strokeColor=None))
     drawing.add(String(73, 173, "Recalled before", fontSize=8))
-    drawing.add(Rect(160, 172, 9, 9, fillColor=TEAL, strokeColor=None))
+    drawing.add(Rect(160, 172, 9, 9, fillColor=JADE, strokeColor=None))
     drawing.add(String(173, 173, "Current", fontSize=8))
     return drawing
 
@@ -227,7 +228,7 @@ def generate_report(metrics, findings, selected_interventions):
     story.append(_p("Improvement Brief for the Understanding 988 Training", S_SUB))
     if demo:
         banner = Table([[_p(DEMO_BANNER, S_BANNER)]], colWidths=[width])
-        banner.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), PURPLE),
+        banner.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), FOREST),
                                     ("TOPPADDING", (0, 0), (-1, -1), 10), ("BOTTOMPADDING", (0, 0), (-1, -1), 10)]))
         story += [banner, Spacer(1, 12)]
         status_text = "DEMO - synthetic (fictional) data"

@@ -424,9 +424,9 @@ def render_pdf_report(clean_df: pd.DataFrame, summary: dict, selections: dict, s
         return
 
     chosen = st.session_state.get("chosen_actions", [])
-    st.write(f"Actions chosen in Action Lab: **{len(chosen)}**")
+    st.write(f"Actions selected in Intervention Planner: **{len(chosen)}**")
     if not chosen:
-        st.caption("You can generate a report now, or visit Action Lab and select improvements first.")
+        st.caption("You can generate a findings-only report now. To include an action plan, select improvements in Intervention Planner.")
 
     findings = build_action_findings(clean_df)
     metrics = to_person5_metrics(clean_df, summary, source_label)

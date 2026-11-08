@@ -12,10 +12,10 @@ import streamlit as st
 
 from ui_styles import inject_styles, intro, stat_cards, focus_card
 
-PURPLE = "#8064B3"
-TEAL = "#148A83"
-AMBER = "#A96509"
-GRAY = "#64748B"
+BARK = "#A17C59"
+JADE = "#287859"
+UMBER = "#9E764C"
+MUTED = "#64786B"
 TOPIC_LIMIT = "Retrospective self-report; this comparison does not establish a causal training effect."
 LABELS = {
     "before_identify": "Identify crisis · recalled before",
@@ -58,19 +58,19 @@ def style_app():
 
 def _chart(fig, key, *, percent_axis=False, height=330):
     fig.update_layout(
-        template=None, font=dict(family="Segoe UI, Arial, sans-serif", size=13, color="#514463"),
+        template=None, font=dict(family="Segoe UI, Arial, sans-serif", size=13, color="#284333"),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=12, r=12, t=24, b=12),
         legend=dict(orientation="h", y=1.16, x=0),
         height=height, hovermode="closest",
-        colorway=["#7452BC", "#2D897F", "#E4A46C"],
+        colorway=["#A17C59", "#287859", "#D5B48D"],
     )
     if percent_axis:
         fig.update_yaxes(range=[0, 100], title="Share of valid paired responses (%)")
     st.plotly_chart(fig, width="stretch", theme=None, key=key, config={"displaylogo": False, "displayModeBar": False})
 
 
-def _bar(records, category, value, *, x_title, color=PURPLE, horizontal=False):
+def _bar(records, category, value, *, x_title, color=BARK, horizontal=False):
     labels = [str(row[category]) for row in records]
     values = [row[value] for row in records]
     fig = go.Figure(go.Bar(
@@ -144,18 +144,18 @@ def render_overview(summary):
                 name="Recalled before",
                 x=labels,
                 y=[item["before_mean"] for _, item in records],
-                marker_color="#CFC2F0",
+                marker_color="#D9C3A8",
                 marker_line_width=0,
             )
             fig.add_bar(
                 name="Current",
                 x=labels,
                 y=[item["after_mean"] for _, item in records],
-                marker_color="#7555BE",
+                marker_color="#287859",
                 marker_line_width=0,
             )
             fig.update_layout(barmode="group", bargap=.28)
-            fig.update_yaxes(range=[0, 5], title=None, gridcolor="#EEE8F5")
+            fig.update_yaxes(range=[0, 5], title=None, gridcolor="#E4EBDF")
             fig.update_xaxes(title=None, tickfont=dict(size=11))
             _chart(fig, "overview_knowledge", height=320)
         else:
@@ -242,7 +242,7 @@ def render_knowledge(summary):
             st.markdown(f"**{topic}**")
             paired = summary["distributions"]["knowledge_paired"][topic]
             fig = go.Figure()
-            for period, label, color in [("before", "Recalled before", PURPLE), ("after", "Current", TEAL)]:
+            for period, label, color in [("before", "Recalled before", BARK), ("after", "Current", JADE)]:
                 fig.add_bar(name=label, x=[r["value"] for r in paired[period]["values"]],
                             y=[None if r["share"] is None else r["share"] * 100 for r in paired[period]["values"]], marker_color=color)
             fig.update_layout(barmode="group")
@@ -258,7 +258,7 @@ def render_knowledge(summary):
 
 
 def _rating_chart(dist, key, label, scale_max):
-    _chart(_bar(dist["values"], "value", "count", x_title="Valid answers", color=TEAL), key)
+    _chart(_bar(dist["values"], "value", "count", x_title="Valid answers", color=JADE), key)
     st.caption(f"Question: {label}. Scale 0–{scale_max}. Counts among {dist['valid_n']} valid answers out of {dist['denominator_rows']} rows; {dist['missing_or_invalid_n']} missing/invalid. Self-reported intention does not establish behavior.")
 
 
@@ -296,7 +296,7 @@ def render_representation(summary):
             st.caption(f"Counts from {summary['overview']['survey_rows']} selected rows; {coverage['missing_category_n']} unanswered categories. " + ("Multi-select roles overlap." if field == "role" else "Response share does not establish population coverage."))
     dates = summary["coverage"]["training_date"]
     if dates["dates"]:
-        fig = go.Figure(go.Bar(x=[v["date"][:10] for v in dates["dates"]], y=[v["n"] for v in dates["dates"]], marker_color=TEAL))
+        fig = go.Figure(go.Bar(x=[v["date"][:10] for v in dates["dates"]], y=[v["n"] for v in dates["dates"]], marker_color=JADE))
         fig.update_xaxes(title="Reported training date", type="date")
         fig.update_yaxes(title="Survey rows", rangemode="tozero")
         _chart(fig, "training_dates")
@@ -311,7 +311,7 @@ def render_missingness(summary):
     records = summary["missingness"]
     fig = go.Figure()
     labels = [LABELS.get(r["field"], r["field"]) for r in records]
-    for label, key, color in [("Unanswered", "source_missing_n", GRAY), ("Invalid / unusable", "invalid_or_unusable_n", AMBER)]:
+    for label, key, color in [("Unanswered", "source_missing_n", MUTED), ("Invalid / unusable", "invalid_or_unusable_n", UMBER)]:
         fig.add_bar(name=label, y=labels, x=[r[key] for r in records], orientation="h", marker_color=color)
     fig.update_layout(barmode="stack", height=650)
     fig.update_yaxes(autorange="reversed")
