@@ -72,14 +72,17 @@ class StoryPresentationTests(unittest.TestCase):
         options = ["Fairfax", "Montgomery", "Prince George's"]
         with patch("app.st.session_state", state):
             _set_filter_choices("filter_counties", options, True)
+            self.assertEqual(state["filter_open_section"], "filter_counties")
             self.assertEqual(state["filter_counties"], options)
             self.assertTrue(state[_filter_option_key("filter_counties", 2)])
             state[_filter_option_key("filter_counties", 1)] = False
             _sync_filter_choices("filter_counties", options)
+            self.assertEqual(state["filter_open_section"], "filter_counties")
             self.assertEqual(
                 state["filter_counties"], ["Fairfax", "Prince George's"]
             )
             _set_filter_choices("filter_counties", options, False)
+            self.assertEqual(state["filter_open_section"], "filter_counties")
             self.assertEqual(state["filter_counties"], [])
             self.assertFalse(state[_filter_option_key("filter_counties", 0)])
 
