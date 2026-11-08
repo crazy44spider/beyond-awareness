@@ -396,6 +396,14 @@ def _set_filter_choices(state_key: str, options: list[str], checked: bool) -> No
         st.session_state[_filter_option_key(state_key, index)] = checked
 
 
+def _sync_filter_choices(state_key: str, options: list[str]) -> None:
+    """Keep the toolbar's active-filter count current on the same rerun."""
+    st.session_state[state_key] = [
+        option for index, option in enumerate(options)
+        if st.session_state.get(_filter_option_key(state_key, index), False)
+    ]
+
+
 def _checklist_filter(label: str, options, state_key: str) -> list[str]:
     """Dropdown-like checklist: no text entry, no growing selection chips."""
     available = [str(option) for option in options]
@@ -434,6 +442,8 @@ def _checklist_filter(label: str, options, state_key: str) -> list[str]:
                 option,
                 value=option in selected,
                 key=_filter_option_key(state_key, index),
+                on_change=_sync_filter_choices,
+                args=(state_key, available),
             ):
                 selected_now.append(option)
         if not available:
