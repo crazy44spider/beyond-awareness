@@ -556,83 +556,197 @@ def render_participant_voices(clean_df: pd.DataFrame) -> None:
 
 
 def render_survey_workspace(clean_df: pd.DataFrame) -> None:
-    """Build a future survey, not a table of metadata."""
+    """A decision-first recommendation engine linked to all three modules."""
     heading(
         "04 / SURVEY DESIGNER",
-        "Ask what the original survey couldn't.",
-        "Choose a small set of better questions for the next training.",
+        "What should the next survey ask?",
+        "Find questions missing from this questionnaire, then connect them "
+        "to the numerical patterns and written feedback in this upload.",
     )
     if clean_df.empty:
         st.info("No responses match the current filters.")
         return
-    report = analyze_survey(clean_df)
+
+    # Person 2 and Person 3 operate on the SAME selected survey responses.
+    # Person 4's original algorithm combines those signals with its own
+    # keyword screen, then filters questions the uploaded form already asks.
+    from survey_evidence import team_survey_findings
+    evidence = team_survey_findings(clean_df)
+    report = analyze_survey(clean_df, external_findings=evidence)
     coverage = report["coverage"]
     recommended = report["recommendations"]
     questions = {q["id"]: q for q in question_bank}
 
-    st.subheader("Where the current survey stops")
+    direct = int((coverage["coverage"] == "Directly measured").sum())
+    added = len(report["supplemental_question_columns"])
+    linked = len(evidence)
+
+    st.markdown("### What the uploaded questionnaire measures")
+    kpis([
+        ("Dimensions with direct questions", f"{direct} of {len(coverage)}",
+         "Newly added questions can change this score"),
+        ("Additional question columns", f"{added}",
+         "Beyond the 20 required original fields"),
+        ("Teammate analysis signals", f"{linked}",
+         "Person 2 numerical analysis + Person 3 themes"),
+    ])
     for _, row in coverage.iterrows():
         status = str(row["coverage"])
-        badge = "Partly measured" if "Partially" in status else "Not measured" if "Not" in status else status
+        status_short = (
+            "Direct question found" if status == "Directly measured"
+            else "Partly covered" if status == "Partially measured"
+            else "Not yet asked"
+        )
+        color = "green" if status == "Directly measured" else "gold"
+        explanation = (
+            "Recognized added question: " + "; ".join(row["matched_question_headers"][:2])
+            if row["question_count"] else row["explanation"]
+        )
         st.markdown(
-            '<div class="ba-coverage"><strong>' + esc(row["dimension"]) + '</strong>'
-            + pill(badge, color="gold" if "Not" in status else "green")
+            '<div class="ba-coverage" style="align-items:flex-start">'
+            '<div><strong>' + esc(row["dimension"]) + '</strong>'
+            '<p style="margin:5px 0 0;font-size:.84rem;line-height:1.45;'
+            'color:#69796D">' + esc(explanation) + '</p></div>'
+            + pill(status_short, color=color)
             + "</div>",
             unsafe_allow_html=True,
         )
+    if report["unclassified_question_columns"]:
+        st.caption(
+            f"{len(report['unclassified_question_columns'])} additional column(s) "
+            "were loaded but not confidently assigned to an accessibility dimension. "
+            "The classification uses transparent matching rules, so staff should "
+            "review paraphrased or unfamiliar questions."
+        )
+    elif added:
+        st.caption(
+            "Added questions were recognized from their column headings. "
+            "Direct coverage does not mean every aspect of a dimension is measured."
+        )
+
+    st.divider()
+    st.markdown("### Best questions for the next survey")
     st.caption(
-        "These are questions the survey does not directly ask, not proof that any barrier exists."
+        "Prioritized by current numerical patterns and coded feedback. "
+        "If no relevant signal exists, unmeasured questionnaire topics are "
+        "suggested as lower-priority design gaps. Already-asked questions are excluded."
     )
-
-    st.markdown("### Questions worth adding")
-    st.caption("Based on the current survey's coverage and coded requests.")
-    suggestions = recommended.head(3)
-    if suggestions.empty:
-        st.info("No question matched the current detection rules. You can still choose from the full bank.")
-    else:
-        for rank, (_, suggestion) in enumerate(suggestions.iterrows(), start=1):
-            with st.container(border=True):
-                st.caption(f"QUESTION {rank} · {suggestion['dimension']}")
-                st.markdown("**" + suggestion["question"] + "**")
-                why = suggestion.get("why_recommended", [])
-                if isinstance(why, list) and why:
-                    st.caption("Suggested because: " + "; ".join(map(str, why[:2])))
-
-    default_ids = recommended["question_id"].tolist()
-    selected = st.multiselect(
-        "Build your draft survey",
-        options=list(questions),
-        default=default_ids,
-        format_func=lambda qid: questions[qid]["question"],
-        key="story_survey_selected",
-    )
-    if selected:
-        st.download_button(
-            "Download selected questions (CSV)",
-            data=export_selected_questions(selected),
-            file_name="everymind_followup_questions.csv",
-            mime="text/csv",
-            type="primary",
-            key="story_survey_download",
+    if recommended.empty:
+        st.success(
+            "No unused question from the current 10-question bank matched "
+            "the remaining evidence and coverage rules."
         )
     else:
-        st.caption("Choose at least one question to enable the download.")
+        for rank, (_, suggestion) in enumerate(recommended.head(5).iterrows(), start=1):
+            sources = list(suggestion.get("evidence_sources", []))
+            triggered = [
+                str(title) for title in suggestion.get("why_recommended", [])
+            ]
+            source_names = {
+                "person2_gap_detector": "Knowledge / willingness analysis",
+                "person3_feedback_themes": "Participant feedback themes",
+                "keyword_screening": "Written-response keyword screen",
+                "accessibility_audit": "Survey response coverage",
+                "questionnaire_coverage": "Missing questionnaire topic",
+            }
+            with st.container(border=True):
+                col_main, col_label = st.columns([4.3, 1], vertical_alignment="top")
+                with col_main:
+                    st.caption(
+                        f"RECOMMENDATION {rank} · {suggestion['dimension']} · "
+                        f"{suggestion['question_id']}"
+                    )
+                    st.markdown("### " + str(suggestion["question"]))
+                    st.write("**What it would measure:** " + str(suggestion["purpose"]))
+                with col_label:
+                    st.caption("WHY NOW")
+                    st.markdown(
+                        "**Evidence-linked**" if any(
+                            k in sources for k in ("person2_gap_detector",
+                                                  "person3_feedback_themes")
+                        ) else "**Coverage gap**"
+                    )
+                if triggered:
+                    st.markdown(
+                        "**Why this question:** " + "; ".join(triggered[:3])
+                    )
+                st.caption(
+                    "Based on: " + ", ".join(
+                        source_names.get(x, x.replace("_", " "))
+                        for x in sources
+                    )
+                )
+                with st.expander("Preview answer choices"):
+                    st.caption(str(suggestion["response_type"]))
+                    for option in suggestion["options"]:
+                        st.write("• " + str(option))
+        if len(recommended) > 5:
+            st.caption(
+                f"{len(recommended) - 5} other eligible questions can be "
+                "reviewed in the draft-question section below."
+            )
 
-    with st.expander("Full question bank, answer choices and evidence"):
-        for q in question_bank:
-            st.markdown(f"**{q['id']} — {q['question']}**")
-            st.caption(q["dimension"] + " · " + q["purpose"])
-            st.write("Options: " + "; ".join(q["options"]))
-            st.divider()
-        st.markdown("**Observed findings and caveats**")
+    with st.expander("Build a draft survey / export questions"):
+        st.caption(
+            "Optional workflow: first review the evidence above. Then choose "
+            "which unused proposed questions to include in a future survey."
+        )
+        eligible_ids = recommended["question_id"].tolist()
+        selected = st.multiselect(
+            "Choose proposed questions",
+            options=eligible_ids,
+            default=eligible_ids[:5],
+            format_func=lambda qid: f"{qid} — {questions[qid]['question']}",
+            key="story_survey_selected",
+        )
+        if selected:
+            st.download_button(
+                "Download the selected questions (CSV)",
+                data=export_selected_questions(selected),
+                file_name="everymind_followup_questions.csv",
+                mime="text/csv",
+                key="story_survey_download",
+            )
+        else:
+            st.caption("Choose questions above to enable the export.")
+
+    with st.expander("Methods, full question bank and supporting evidence"):
+        st.markdown("**How these suggestions were produced**")
+        st.write(
+            "Person 2 supplies descriptive knowledge/willingness findings. "
+            "Person 3 supplies coded feedback themes. The original Person 4 "
+            "rules connect these signals and questionnaire gaps to ten proposed "
+            "questions. Keyword matches are not verified participant experiences."
+        )
+        st.markdown("**Recognized questions in this workbook**")
+        st.write(
+            ", ".join(report["recognized_question_ids"])
+            if report["recognized_question_ids"] else
+            "No added accessibility-specific questions were recognized."
+        )
+        st.markdown("**All ten candidate questions**")
+        st.dataframe(
+            report["question_bank"][
+                ["id", "dimension", "question", "purpose"]
+            ],
+            hide_index=True, width="stretch",
+        )
+        st.markdown("**Finding audit trail**")
         for finding in report["findings"]:
-            st.write(f"**{finding['title']}** — {finding['description']}")
-            for note in finding.get("limitations", []):
-                st.caption(note)
-        st.dataframe(coverage, hide_index=True, width="stretch")
+            with st.expander(f"{finding['source'].replace('_', ' ').capitalize()} · {finding['title']}"):
+                st.write(finding["description"])
+                for limitation in finding.get("limitations", []):
+                    st.caption(limitation)
+        st.markdown("**Coverage evidence**")
+        st.dataframe(
+            coverage[["dimension", "coverage", "question_count", "explanation"]],
+            hide_index=True, width="stretch",
+        )
+
     st.caption(
-        "Questions are proposals, not validated instruments. EveryMind should "
-        "review them before participant use."
+        "Coverage reflects the questionnaire's actual columns, not an inference "
+        "about respondents. A question bank is a proposal and should be reviewed "
+        "by EveryMind before use. Uploading a revised workbook re-runs this audit."
     )
 
 
