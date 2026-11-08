@@ -14,7 +14,9 @@ SAGE = "#93BFA4"
 MINT = "#E6F1E8"
 IVORY = "#F7F8F2"
 CREAM = "#FFFDF7"
-GOLD = "#C89E61"
+GOLD = "#A17C59"
+BARK = "#A17C59"
+SAND = "#D8BE99"
 INK = "#22392E"
 MUTED = "#617568"
 GRID = "#E5EBE3"
@@ -23,7 +25,7 @@ STYLE = r"""
 <style>
 :root {
   --forest:#143E30; --jade:#237557; --sage:#93BFA4;
-  --ivory:#F7F8F2; --cream:#FFFDF7; --gold:#C89E61;
+  --ivory:#F7F8F2; --cream:#FFFDF7; --gold:#A17C59; --bark:#A17C59;
   --ink:#22392E; --muted:#617568; --line:#E0E9DE;
 }
 html, body, [data-testid="stAppViewContainer"] {
@@ -34,7 +36,7 @@ html, body, [data-testid="stAppViewContainer"] {
     background:var(--ivory) !important;
 }
 [data-testid="stAppViewContainer"] [data-testid="stMainBlockContainer"] {
-    max-width:1100px; padding-top:2.0rem; padding-bottom:5rem;
+    max-width:1200px; padding-top:1.15rem; padding-bottom:3.5rem;
 }
 [data-testid="stHeader"] {background:transparent !important;}
 [data-testid="stMain"] {color:var(--ink);}
@@ -202,25 +204,25 @@ button:focus-visible, [role="radio"]:focus-visible,
 /* ── Compact Spotify-inspired navigation, with no emoji/icon dependencies ── */
 section[data-testid="stSidebar"],
 [data-testid="stSidebar"] {
-    width:220px !important;
-    min-width:220px !important;
-    max-width:220px !important;
+    width:198px !important;
+    min-width:198px !important;
+    max-width:198px !important;
     background:#121D18 !important;
     border-right:1px solid #2C3B31 !important;
 }
 [data-testid="stSidebarUserContent"] {
-    padding:16px 13px 18px !important;
+    padding:11px 11px 14px !important;
 }
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
     gap:.1rem !important;
 }
 .ba-nav-brand {
     display:flex;align-items:center;gap:11px;
-    padding:10px 4px 24px;
+    padding:6px 4px 14px;
 }
 .ba-nav-monogram {
     display:flex;align-items:center;justify-content:center;
-    width:37px;height:37px;flex-shrink:0;
+    width:33px;height:33px;flex-shrink:0;
     border-radius:10px;
     color:#DFF6E1;
     background:#24533B;
@@ -230,7 +232,7 @@ section[data-testid="stSidebar"],
 }
 .ba-nav-title {
     color:#F5F7F1;
-    font-size:.76rem;font-weight:800;
+    font-size:.69rem;font-weight:800;
     line-height:1.21;letter-spacing:.055em;
 }
 .ba-nav-section {
@@ -238,25 +240,25 @@ section[data-testid="stSidebar"],
     font-size:.63rem;
     letter-spacing:.16em;
     font-weight:760;
-    margin:1px 0 9px 14px;
+    margin:0 0 6px 10px;
 }
 .ba-nav-secondary {
-    margin-top:21px;
-    padding-top:18px;
+    margin-top:10px;
+    padding-top:9px;
     border-top:1px solid #2A3C31;
 }
 [data-testid="stSidebar"] .stButton > button,
 [data-testid="stSidebar"] button[data-testid^="stBaseButton"] {
     width:100% !important;
-    min-height:39px !important;
-    padding:8px 12px !important;
+    min-height:35px !important;
+    padding:6px 11px !important;
     border-radius:8px !important;
     border:1px solid transparent !important;
     background:transparent !important;
     color:#B4C3B9 !important;
     text-align:left !important;
     justify-content:flex-start !important;
-    font-size:.83rem !important;
+    font-size:.79rem !important;
     font-weight:550 !important;
     box-shadow:none !important;
     letter-spacing:0 !important;
@@ -331,12 +333,109 @@ section[data-testid="stSidebar"],
 @media(max-width:860px) {
     section[data-testid="stSidebar"],
     [data-testid="stSidebar"] {
-        width:208px !important;
-        min-width:208px !important;
-        max-width:208px !important;
+        width:192px !important;
+        min-width:192px !important;
+        max-width:192px !important;
     }
     [data-testid="stSidebarUserContent"] { padding:12px 10px !important; }
     .ba-data-toolbar-status {font-size:.86rem;}
+}
+
+
+/* Single source of truth for accessible forest/bark focus and selection. */
+::selection,
+[data-testid="stAppViewContainer"] ::selection {
+  background:#C5DCC4 !important; color:#153C2C !important;
+}
+::-moz-selection {background:#C5DCC4 !important;color:#153C2C !important;}
+input,textarea,select {accent-color:#287859 !important;caret-color:#287859 !important;}
+input[type="radio"],input[type="checkbox"],input[type="range"] {
+  accent-color:#287859 !important;
+}
+[data-baseweb="radio"] [aria-checked="true"],
+[data-baseweb="checkbox"] [aria-checked="true"] {
+  color:#287859 !important;
+}
+[data-baseweb="tab-highlight"] {background:#287859 !important;}
+[data-testid="stTabs"] [aria-selected="true"] {
+  color:#173D2C !important; background:#E9F2E7 !important;
+  border-bottom:2px solid #287859 !important;
+}
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+  gap:4px !important;flex-wrap:wrap !important;
+}
+[data-testid="stTabs"] [data-baseweb="tab"] {
+  padding:8px 12px !important;white-space:nowrap;
+}
+[data-testid="stSegmentedControl"] [aria-checked="true"],
+[data-testid="stPills"] [aria-checked="true"] {
+  background:#287859 !important;color:#FFFDF7 !important;
+}
+[data-testid="stSelectbox"] [data-baseweb="select"]:focus-within,
+[data-testid="stMultiSelect"] [data-baseweb="select"]:focus-within,
+[data-testid="stTextInput"] input:focus,
+[data-testid="stTextArea"] textarea:focus {
+  border-color:#287859 !important;
+  box-shadow:0 0 0 1px #287859 !important;
+}
+[data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"]:hover,
+[data-testid="stDownloadButton"] button:hover,
+[data-testid="stButton"] button:hover {
+  border-color:#A17C59 !important;
+}
+.stButton > button[kind="primary"],
+.stDownloadButton > button[kind="primary"],
+button[data-testid="stBaseButton-primary"] {
+  color:#FFFFFF !important;
+  background:#173D2C !important;
+  border:1px solid #173D2C !important;
+}
+.stButton > button[kind="primary"] p,
+.stDownloadButton > button[kind="primary"] p {color:#FFFFFF !important;}
+.stButton > button[kind="primary"]:hover,
+.stDownloadButton > button[kind="primary"]:hover {
+  color:#FFFFFF !important;background:#287859 !important;
+}
+[data-testid="stAppViewContainer"] [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] {
+  gap:.78rem !important;
+}
+[data-testid="stSidebar"] .stButton > button {
+    text-align:left !important;justify-content:flex-start !important;
+    font-weight:560 !important;
+}
+[data-testid="stSidebar"] .stButton > button p,
+[data-testid="stSidebar"] .stButton > button div[data-testid="stMarkdownContainer"] {
+  text-align:left !important;
+  width:100% !important;
+}
+[data-testid="stSidebar"] .stButton > button[kind="primary"] p {
+    color:#F7FAF4 !important;
+}
+[data-testid="stSidebar"] .stButton > button:hover p {
+    color:#F7FAF4 !important;
+}
+/* Numbers-only reference screen: compact, legible evidence tables. */
+.ba-data-explorer-head {
+  border-bottom:1px solid #DBE6DA;
+  padding-bottom:12px;
+  margin-bottom:12px;
+}
+.ba-data-explorer-head h2 {
+  font-size:1.12rem !important;font-weight:750;
+  margin:0 0 4px !important;
+}
+.ba-data-explorer-head p {
+  margin:0;color:#6D7E6E;font-size:.83rem;
+}
+[data-testid="stDataFrame"] {
+  border:1px solid #DDE6DC !important;
+  border-radius:12px !important;
+  overflow:hidden;
+}
+@media(max-width:770px) {
+  [data-testid="stAppViewContainer"] [data-testid="stMainBlockContainer"] {
+    padding-top:.8rem !important;
+  }
 }
 
 </style>
