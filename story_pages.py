@@ -579,16 +579,20 @@ def render_survey_workspace(clean_df: pd.DataFrame) -> None:
 
     direct = int((coverage["coverage"] == "Directly measured").sum())
     added = len(report["supplemental_question_columns"])
-    linked = len(evidence)
+    evidence_linked = sum(
+        any(source in ("person2_gap_detector", "person3_feedback_themes")
+            for source in row["evidence_sources"])
+        for _, row in recommended.iterrows()
+    )
 
     st.markdown("### What the uploaded questionnaire measures")
     kpis([
         ("Dimensions with direct questions", f"{direct} of {len(coverage)}",
-         "Newly added questions can change this score"),
-        ("Additional question columns", f"{added}",
-         "Beyond the 20 required original fields"),
-        ("Teammate analysis signals", f"{linked}",
-         "Person 2 numerical analysis + Person 3 themes"),
+         "Coverage changes when new questions are uploaded"),
+        ("New question columns", f"{added}",
+         "Added beyond the original 20 survey fields"),
+        ("Evidence-linked suggestions", f"{evidence_linked}",
+         "Prompted by Person 2 or 3 findings"),
     ])
     for _, row in coverage.iterrows():
         status = str(row["coverage"])
@@ -637,7 +641,7 @@ def render_survey_workspace(clean_df: pd.DataFrame) -> None:
             "the remaining evidence and coverage rules."
         )
     else:
-        for rank, (_, suggestion) in enumerate(recommended.head(5).iterrows(), start=1):
+        for rank, (_, suggestion) in enumerate(recommended.head(3).iterrows(), start=1):
             sources = list(suggestion.get("evidence_sources", []))
             triggered = [
                 str(title) for title in suggestion.get("why_recommended", [])
@@ -680,11 +684,18 @@ def render_survey_workspace(clean_df: pd.DataFrame) -> None:
                     st.caption(str(suggestion["response_type"]))
                     for option in suggestion["options"]:
                         st.write("• " + str(option))
-        if len(recommended) > 5:
-            st.caption(
-                f"{len(recommended) - 5} other eligible questions can be "
-                "reviewed in the draft-question section below."
-            )
+        if len(recommended) > 3:
+            with st.expander(f"See {len(recommended) - 3} more recommended questions"):
+                for _, suggestion in recommended.iloc[3:].iterrows():
+                    st.markdown(
+                        "**" + str(suggestion["question_id"]) + " — "
+                        + str(suggestion["question"]) + "**"
+                    )
+                    st.caption(
+                        str(suggestion["dimension"]) + " · "
+                        + "; ".join(suggestion["why_recommended"][:2])
+                    )
+                    st.divider()
 
     with st.expander("Build a draft survey / export questions"):
         st.caption(
