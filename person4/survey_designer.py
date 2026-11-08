@@ -935,190 +935,161 @@ def export_selected_questions(selected_ids):
 
 def render_survey_designer(report):
     """
-    The dashboard owner can call this function
-    inside their Streamlit app.
+    Friendly front-end for the same question-bank and recommendation functions.
 
-    We import Streamlit INSIDE the function so the
-    analysis can still be tested without launching
-    the dashboard.
+    All original evidence, audit tables, question previews and CSV export are
+    still available. Only their visual order and defaults have changed.
     """
-
     import streamlit as st
+    from ui_styles import intro, stat_cards, focus_card
 
-    st.header("Accessibility & Adaptive Survey Designer")
-
-    st.caption(
-        "Evaluate what the survey measures, identify "
-        "potential gaps, and recommend follow-up questions."
+    intro(
+        "HELP EVERYMIND LEARN WHAT THE SURVEY MISSES",
+        "Ask better questions next time",
+        "See what's measurable now, explore suggested follow-up questions, "
+        "and build a more inclusive future survey.",
     )
 
     summary = report["summary"]
-
-    # Top statistics
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.metric(
-            "Survey responses",
-            f"{summary['total_responses']:,}"
-        )
-
-    with col2:
-        st.metric(
-            "Call-intent answers missing",
-            f"{summary['missing_call_percent']:.1f}%"
-        )
-
-    with col3:
-        st.metric(
-            "Suggested questions available",
-            len(question_bank)
-        )
-
-    # Coverage audit
-
-    st.subheader("Accessibility Coverage Audit")
-
-    st.dataframe(
-        report["coverage"],
-        hide_index=True,
-        use_container_width=True
-    )
-
-    st.caption(
-        "Coverage describes the questions the survey asks. "
-        "It does not establish whether participants have "
-        "these accessibility barriers."
-    )
-
-    # Findings
-
-    st.subheader("Findings From This Survey")
-
-    for finding in report["findings"]:
-
-        with st.expander(finding["title"]):
-
-            st.write(finding["description"])
-
-            if finding.get("count") is not None:
-                st.write(
-                    f"Matched: {finding['count']} "
-                    f"of {finding.get('denominator', '?')}"
-                )
-
-            st.caption(
-                f"Source: {finding['source']}"
-            )
-
-            if finding.get("limitations"):
-
-                st.write("**Limitations:**")
-
-                for limitation in finding["limitations"]:
-                    st.write(f"- {limitation}")
-
-    # Recommended questions
-
-    st.subheader("Recommended Follow-up Questions")
-
     recommendations = report["recommendations"]
+    findings = report["findings"]
+    coverage = report["coverage"]
+
+    stat_cards([
+        {
+            "icon": "💜", "tone": "lilac",
+            "label": "Survey responses",
+            "value": f"{summary['total_responses']:,}",
+            "detail": "Current data selection",
+        },
+        {
+            "icon": "🔎", "tone": "peach",
+            "label": "Call-intent answers missing",
+            "value": f"{summary['missing_call_percent']:.1f}%",
+            "detail": "Does not mean unwillingness",
+        },
+        {
+            "icon": "📝", "tone": "mint",
+            "label": "Draft question bank",
+            "value": str(len(question_bank)),
+            "detail": "Optional questions for EveryMind review",
+        },
+    ])
+
+    st.write("")
+    focus_card(
+        "THE OPPORTUNITY",
+        "Awareness isn't the same as accessibility",
+        "The existing survey asks about calling 988, but not preferred contact "
+        "methods, trust, practical access, or emotional comfort. "
+        "A short follow-up can help EveryMind learn rather than assume.",
+    )
+
+    st.subheader("What isn't being measured yet?")
+    st.caption(
+        "These are survey-design gaps, not evidence that specific participant groups face them."
+    )
+
+    for _, row in coverage.iterrows():
+        with st.expander(f"{row['dimension']} · {row['coverage']}"):
+            st.write(row["explanation"])
+
+    with st.expander("View the complete coverage table"):
+        st.dataframe(coverage, hide_index=True, width="stretch")
+
+    st.write("")
+    st.subheader("Recommended follow-up questions")
+    st.caption(
+        "Suggestions change with the data and are linked to observations. "
+        "A keyword mention alone does not establish a barrier."
+    )
 
     if recommendations.empty:
         st.info(
-            "No rules produced a recommendation. "
-            "You can still select questions from "
-            "the full question bank below."
+            "No detection rule recommended a specific question for this selection. "
+            "You can still choose from the complete question bank below."
         )
     else:
+        for _, item in recommendations.iterrows():
+            with st.expander(
+                f"{item['question_id']} · {item['question']}"
+            ):
+                st.caption(item["dimension"])
+                st.markdown("**Why consider this question?**")
+                for reason in item["why_recommended"]:
+                    st.write("- " + reason)
+                st.markdown("**Response options**")
+                for option in item["options"]:
+                    st.write("- " + option)
+                st.write("**What we'd learn:** " + item["purpose"])
+                st.caption(
+                    "Signals: " + ", ".join(item["evidence_sources"])
+                )
 
-        display = recommendations.copy()
+    with st.expander("Show the detected findings and their limitations"):
+        if not findings:
+            st.info("No findings were produced for this selection.")
+        for finding in findings:
+            st.markdown("**" + finding["title"] + "**")
+            st.write(finding["description"])
+            if finding.get("count") is not None:
+                st.caption(
+                    f"Matched: {finding['count']} of "
+                    f"{finding.get('denominator', 'unknown denominator')}"
+                )
+            st.caption("Source: " + finding["source"])
+            for limitation in finding.get("limitations", []):
+                st.caption("• " + limitation)
+            st.divider()
 
-        display["why_recommended"] = (
-            display["why_recommended"].apply(
-                lambda values: "; ".join(values)
-            )
-        )
-
-        display["evidence_sources"] = (
-            display["evidence_sources"].apply(
-                lambda values: ", ".join(values)
-            )
-        )
-
-        st.dataframe(
-            display[[
-                "question_id",
-                "dimension",
-                "question",
-                "why_recommended",
-                "evidence_sources"
-            ]],
-            hide_index=True,
-            use_container_width=True
-        )
-
-    # Select and export questions
-
-    st.subheader("Build a Follow-up Survey")
-
-    st.write(
-        "Choose which draft questions EveryMind "
-        "should consider adding to a future survey."
+    st.write("")
+    st.subheader("Build your next survey")
+    st.caption(
+        "Choose the questions you'd like to propose. Nothing is sent to participants; "
+        "you'll download a draft for EveryMind's review."
     )
 
     question_lookup = {
-        question["id"]: question
-        for question in question_bank
+        q["id"]: q for q in question_bank
     }
-
-    recommended_ids = (
-        recommendations["question_id"].tolist()
-    )
+    recommended_ids = recommendations["question_id"].tolist()
 
     selected_ids = st.multiselect(
-        "Select questions",
-        options=list(question_lookup.keys()),
+        "Select draft questions",
+        options=list(question_lookup),
         default=recommended_ids,
-        format_func=lambda question_id: (
-            f"{question_id} — "
-            f"{question_lookup[question_id]['question']}"
-        )
+        format_func=lambda qid: (
+            f"{qid} — {question_lookup[qid]['question']}"
+        ),
     )
 
-    if selected_ids:
-
-        with st.expander("Preview selected questions"):
-
-            for question_id in selected_ids:
-
-                q = question_lookup[question_id]
-
-                st.write(
-                    f"**{question_id}: {q['question']}**"
-                )
-
-                st.caption(q["dimension"])
-
-                for option in q["options"]:
-                    st.write(f"- {option}")
-
-                st.write(f"*Purpose:* {q['purpose']}")
+    with st.expander("Preview your selected questions"):
+        if not selected_ids:
+            st.caption("Select questions above to preview them here.")
+        for qid in selected_ids:
+            q = question_lookup[qid]
+            st.markdown(f"**{qid}: {q['question']}**")
+            st.caption(q["dimension"])
+            for option in q["options"]:
+                st.write("- " + option)
+            st.caption("Purpose: " + q["purpose"])
+            st.divider()
 
     st.download_button(
-        label="Download selected questions (CSV)",
+        "Download draft questions (CSV)",
         data=export_selected_questions(selected_ids),
         file_name="everymind_followup_questions.csv",
         mime="text/csv",
-        disabled=(len(selected_ids) == 0)
+        disabled=not selected_ids,
+        key="survey_designer_csv_download",
     )
 
+    with st.expander("Browse all 10 draft questions"):
+        st.dataframe(report["question_bank"], hide_index=True, width="stretch")
+
     st.caption(
-        "These questions are proposals, not validated "
-        "survey instruments. EveryMind should review "
-        "wording, accessibility, and participant safety "
-        "before using them."
+        "Draft questions are not validated survey instruments. EveryMind should "
+        "review wording, accessibility, consent, and participant safety before use."
     )
 
 
