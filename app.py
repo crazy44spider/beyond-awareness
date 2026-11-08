@@ -38,6 +38,8 @@ import streamlit as st
 from cleaning import EXPECTED_COLUMNS, KNOWLEDGE_COLUMNS, clean_survey, summarize_quality
 from pipeline import PipelineResult, build_summary, filter_survey, run_pipeline
 from dashboard import render_dashboard, render_quality, style_app
+from person4.survey_designer import analyze_survey, render_survey_designer
+from team_integration import render_gap_detector, render_action_lab, render_pdf_report
 
 PAGES = ["Overview", "Gap Detector", "Participant Voices", "Accessibility Audit", "Action Lab", "Report"]
 MODULES = {
@@ -273,28 +275,7 @@ def render_report(clean_df, summary, selections, source_label):
                        json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False),
                        file_name="metrics_summary.json", mime="application/json", key="aggregate_download")
     st.caption("Current selection only. Includes aggregate metrics and limitations; excludes respondent rows, IDs, and comments. Small cells can still be sensitive; public sharing requires appropriate approval.")
-    function, status = load_optional_module("Report")
-    if status == "missing":
-        st.info("PDF feature in progress. The report owner's generator has not been connected yet.")
-        return
-    if status != "ready":
-        st.error(f"The PDF module is present but unavailable ({status}).")
-        return
-    if st.button("Generate PDF report", key="generate_pdf"):
-        findings, issues = collect_findings(clean_df)
-        for issue in issues:
-            st.warning(issue)
-        if issues:
-            st.error("Resolve the analysis errors before generating a PDF report.")
-            return
-        try:
-            pdf = function(metrics=payload, findings=findings, selections=selections)
-            if not isinstance(pdf, bytes) or not pdf.startswith(b"%PDF-"):
-                raise ValueError("Expected PDF bytes.")
-            st.download_button("Download PDF", pdf, "beyond_awareness_report.pdf", "application/pdf", key="pdf_download")
-        except Exception:
-            st.error("PDF generation failed. Ask the report owner to check the generator contract.")
-
+    render_pdf_report(clean_df, summary, selections, source_label)
 
 def main():
     st.set_page_config(page_title="Beyond Awareness", page_icon="◉", layout="wide")
@@ -315,6 +296,12 @@ def main():
         render_quality(result.quality)
     elif page == "Report":
         render_report(filtered, summary, selections, source_label)
+    elif page == "Gap Detector":
+        render_gap_detector(filtered)
+    elif page == "Accessibility Audit":
+        render_survey_designer(analyze_survey(filtered))
+    elif page == "Action Lab":
+        render_action_lab(filtered)
     else:
         render_team_page(page, filtered)
     st.divider()
