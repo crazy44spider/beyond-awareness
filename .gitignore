@@ -1,1 +1,5 @@
 cleaned_survey.csv
+
+# Participant-level survey workbooks stay local/private
+survey_data.xlsx
+survey_data*.xlsx

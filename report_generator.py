@@ -15,11 +15,12 @@ from intervention_planner import DIMENSIONS, DIMENSION_NAMES, build_action_plan,
 # ---------------------------------------------------------------------------
 # Colors from the brief (change here to restyle the whole PDF)
 # ---------------------------------------------------------------------------
-PURPLE = colors.HexColor("#4B2E83")
-LAVENDER = colors.HexColor("#EDE7F6")
-TEAL = colors.HexColor("#148A83")
-TEXT = colors.HexColor("#222222")
-GRAY = colors.HexColor("#666666")
+FOREST = colors.HexColor("#173D2C")
+PALE = colors.HexColor("#EFF4EC")
+JADE = colors.HexColor("#287859")
+BARK = colors.HexColor("#A17C59")
+TEXT = colors.HexColor("#243B2D")
+GRAY = colors.HexColor("#66786C")
 
 DEMO_BANNER = "SYNTHETIC DEMONSTRATION - NOT EVERYMIND RESULTS"
 NA = "Not available"
@@ -27,10 +28,10 @@ NA = "Not available"
 # ---------------------------------------------------------------------------
 # Text styles
 # ---------------------------------------------------------------------------
-S_TITLE = ParagraphStyle("title", fontName="Helvetica-Bold", fontSize=26, leading=31, textColor=PURPLE, spaceAfter=6)
-S_SUB = ParagraphStyle("sub", fontName="Helvetica", fontSize=13, leading=17, textColor=TEAL, spaceAfter=14)
-S_H1 = ParagraphStyle("h1", fontName="Helvetica-Bold", fontSize=16, leading=20, textColor=PURPLE, spaceBefore=6, spaceAfter=6, keepWithNext=1)
-S_H2 = ParagraphStyle("h2", fontName="Helvetica-Bold", fontSize=12, leading=15, textColor=TEAL, spaceBefore=8, spaceAfter=4, keepWithNext=1)
+S_TITLE = ParagraphStyle("title", fontName="Helvetica-Bold", fontSize=26, leading=31, textColor=FOREST, spaceAfter=6)
+S_SUB = ParagraphStyle("sub", fontName="Helvetica", fontSize=13, leading=17, textColor=JADE, spaceAfter=14)
+S_H1 = ParagraphStyle("h1", fontName="Helvetica-Bold", fontSize=16, leading=20, textColor=FOREST, spaceBefore=6, spaceAfter=6, keepWithNext=1)
+S_H2 = ParagraphStyle("h2", fontName="Helvetica-Bold", fontSize=12, leading=15, textColor=JADE, spaceBefore=8, spaceAfter=4, keepWithNext=1)
 S_BODY = ParagraphStyle("body", fontName="Helvetica", fontSize=10, leading=14, textColor=TEXT, spaceAfter=5)
 S_SMALL = ParagraphStyle("small", fontName="Helvetica", fontSize=8.5, leading=11, textColor=TEXT)
 S_NOTE = ParagraphStyle("note", fontName="Helvetica-Oblique", fontSize=8.5, leading=11, textColor=GRAY, spaceAfter=6)
@@ -64,15 +65,15 @@ def _table(rows, col_widths, header=True):
     table = Table(data, colWidths=col_widths, repeatRows=1 if header else 0)
     style = [
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CFC4E6")),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D7E2D5")),
         ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
         ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]
     if header:
-        style.append(("BACKGROUND", (0, 0), (-1, 0), PURPLE))
+        style.append(("BACKGROUND", (0, 0), (-1, 0), FOREST))
         for i in range(1, len(data)):
             if i % 2 == 0:
-                style.append(("BACKGROUND", (0, i), (-1, i), LAVENDER))
+                style.append(("BACKGROUND", (0, i), (-1, i), PALE))
     table.setStyle(TableStyle(style))
     return table
 
@@ -108,12 +109,12 @@ def _make_page_decorator(demo):
         canvas.saveState()
         width, height = letter
         if demo:
-            canvas.setFillColor(PURPLE)
+            canvas.setFillColor(FOREST)
             canvas.rect(0, height - 0.45 * inch, width, 0.45 * inch, stroke=0, fill=1)
             canvas.setFillColor(colors.white)
             canvas.setFont("Helvetica-Bold", 11)
             canvas.drawCentredString(width / 2, height - 0.3 * inch, DEMO_BANNER)
-        canvas.setStrokeColor(LAVENDER)
+        canvas.setStrokeColor(PALE)
         canvas.line(0.8 * inch, 0.65 * inch, width - 0.8 * inch, 0.65 * inch)
         canvas.setFillColor(GRAY)
         canvas.setFont("Helvetica", 8)
@@ -147,15 +148,15 @@ def _knowledge_chart(rows, scale_max):
     chart.categoryAxis.categoryNames = labels
     chart.valueAxis.valueMin = 0
     chart.valueAxis.valueMax = top
-    chart.bars[0].fillColor = colors.HexColor("#B39DDB")
-    chart.bars[1].fillColor = TEAL
+    chart.bars[0].fillColor = BARK
+    chart.bars[1].fillColor = JADE
     chart.categoryAxis.labels.fontSize = 8
     chart.valueAxis.labels.fontSize = 8
     drawing.add(chart)
     # Simple legend
-    drawing.add(Rect(60, 172, 9, 9, fillColor=colors.HexColor("#B39DDB"), strokeColor=None))
+    drawing.add(Rect(60, 172, 9, 9, fillColor=BARK, strokeColor=None))
     drawing.add(String(73, 173, "Recalled before", fontSize=8))
-    drawing.add(Rect(160, 172, 9, 9, fillColor=TEAL, strokeColor=None))
+    drawing.add(Rect(160, 172, 9, 9, fillColor=JADE, strokeColor=None))
     drawing.add(String(173, 173, "Current", fontSize=8))
     return drawing
 
@@ -208,7 +209,7 @@ def generate_report(metrics, findings, selected_interventions):
     story.append(_p("Improvement Brief for the Understanding 988 Training", S_SUB))
     if demo:
         banner = Table([[_p(DEMO_BANNER, S_BANNER)]], colWidths=[width])
-        banner.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), PURPLE),
+        banner.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), FOREST),
                                     ("TOPPADDING", (0, 0), (-1, -1), 10), ("BOTTOMPADDING", (0, 0), (-1, -1), 10)]))
         story += [banner, Spacer(1, 12)]
         status_text = "DEMO - synthetic (fictional) data"
@@ -221,7 +222,7 @@ def generate_report(metrics, findings, selected_interventions):
     elif metrics.get("responses_verified"):
         resp_text = "%s (verified)" % n_resp
     else:
-        resp_text = "%s (NOT verified)" % n_resp
+        resp_text = "%s (not independently verified)" % n_resp
     cover_rows = [
         ["Item", "Details"],
         ["Generated", datetime.date.today().strftime("%B %d, %Y")],
@@ -300,14 +301,21 @@ def generate_report(metrics, findings, selected_interventions):
     validated = [t for t in themes if t.get("validated")]
     pending = len(themes) - len(validated)
     if validated:
-        rows = [["Validated theme", "Count", "Out of"]]
+        rows = [["Validated theme", "Mentions", "Comment responses"]]
         for t in validated:
             rows.append([str(t.get("theme") or NA), _fmt(t.get("count")), _fmt(t.get("denominator"))])
         story.append(_table(rows, [width * 0.6, width * 0.2, width * 0.2]))
-    else:
-        story.append(_p("No validated comment themes were supplied.", S_BODY))
     if pending > 0:
-        story.append(_p("%d theme(s) are still awaiting manual validation and are not reported." % pending, S_NOTE))
+        story.append(_p("Preliminary patterns from keyword-classified comments (not independently validated):", S_H2))
+        rows = [["Coded theme", "Mentions", "Comment responses"]]
+        for t in themes:
+            if not t.get("validated"):
+                rows.append([str(t.get("theme") or NA), _fmt(t.get("count")), _fmt(t.get("denominator"))])
+        story.append(_table(rows, [width * 0.6, width * 0.2, width * 0.2]))
+        story.append(_p("These counts are overlapping theme matches. One comment may be counted in multiple themes; "
+                        "mentions are not confirmed experiences or respondent percentages.", S_NOTE))
+    if not validated and not pending:
+        story.append(_p("No comment themes were available for this selection.", S_BODY))
     excerpts = [str(x) for x in (metrics.get("approved_excerpts") or [])]
     if excerpts:
         story.append(_p("Approved, de-identified excerpts:", S_H2))
@@ -317,9 +325,9 @@ def generate_report(metrics, findings, selected_interventions):
 
     # ===== INCLUSIVE ACCESSIBILITY AUDIT =====
     story.append(_p("5. Inclusive accessibility audit", S_H1))
-    story.append(_p("Each dimension is labeled Measured, Indirectly mentioned (comments only), or Unmeasured. "
-                    "Nothing here assumes participants' race, gender, income, immigration status, trauma, stigma, "
-                    "trust, or preferred contact method.", S_BODY))
+    story.append(_p("Dimensions are rated by what the uploaded questionnaire directly asks: "
+                    "Measured (added question), Partially measured, or Unmeasured. "
+                    "A question's presence is not proof of a barrier, survey validity, or a representative answer.", S_BODY))
     status_map = metrics.get("dimension_status") if isinstance(metrics.get("dimension_status"), dict) else {}
     rows = [["Dimension", "Status", "What the survey can establish", "What remains unknown"]]
     for name in DIMENSION_NAMES:
@@ -378,7 +386,7 @@ def generate_report(metrics, findings, selected_interventions):
                 for q in DIMENSIONS[dim]["future_questions"]:
                     story.append(_p("- [%s] %s" % (dim, q), S_SMALL))
     else:
-        story.append(_p("Select actions in the Action Lab to see decision rules here.", S_BODY))
+        story.append(_p("Select improvements in Intervention Planner to include action-specific decision rules here.", S_BODY))
 
     # ===== METHODS AND LIMITATIONS =====
     story.append(_p("8. Methods and limitations", S_H1))
@@ -388,8 +396,8 @@ def generate_report(metrics, findings, selected_interventions):
         "Sample sizes: small groups can give unstable results and should not be over-interpreted.",
         "Observational interpretation: patterns are not proof that the training caused them.",
         "Effort levels are planning estimates, not proven impact or success probabilities.",
-        "The survey does not measure cultural, socioeconomic, communication, trust, or psychological barriers directly.",
-        "Comment themes count only if manually validated.",
+        "Many accessibility dimensions may still be unmeasured; see the current questionnaire audit above.",
+        "Keyword-coded comments are preliminary; overlapping matches do not establish respondent intent.",
     ]
     story += _bullets(limits)
 
