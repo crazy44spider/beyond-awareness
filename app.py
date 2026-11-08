@@ -98,6 +98,18 @@ def make_demo_data(rows=180):
             training_organization=rng.choice(["Agree", "Strongly agree", "Neither agree or disagree"]),
             recommend_training=rng.randint(4, 10),
             willingness_to_call=rng.randint(0, 10) if i % 4 == 0 else "",
+            valuable_feedback=[
+                "I learned when to call 988",
+                "988 is available 24/7",
+                "Anyone can use the support line",
+                "How to help a friend in need",
+            ][i % 4],
+            improvement_feedback=[
+                "Please include more interactive activities",
+                "I would like more examples and practice",
+                "Can you explain confidentiality?",
+                "More videos and visual examples would help",
+            ][i % 4],
         )
         if i % 10 == 0:
             row["participant_type"] += ";Caregiver/parent"
