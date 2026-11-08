@@ -28,7 +28,9 @@ from dashboard import (
 from feedback_analyzer import analyze_feedback
 from voice_explorer import make_voice_explorer_html
 from intervention_planner import (
+    DIMENSION_NAMES,
     build_action_plan,
+    get_dimension_info,
     get_intervention,
     list_interventions,
     recommend_interventions,
@@ -834,8 +836,62 @@ def render_intervention_roadmap(clean_df: pd.DataFrame) -> None:
     st.caption(
         "Effort is a planning estimate. Recommendations are proposals to test, not proven outcomes."
     )
-    with st.expander("Advanced action planning · comparison and inclusion tools"):
-        render_original_action_lab(clean_df)
+    with st.expander("Advanced options · compare and design for inclusion"):
+        comparison_tab, lens_tab = st.tabs([
+            "Compare interventions", "Inclusive design lens",
+        ])
+        with comparison_tab:
+            catalog = {item["id"]: item for item in list_interventions()}
+            defaults = chosen[:3] if chosen else list(options_by_id)[:2]
+            compare = st.multiselect(
+                "Compare up to three improvements",
+                options=list(catalog),
+                default=defaults,
+                format_func=lambda intervention_id: catalog[intervention_id]["title"],
+                key="story_action_comparison",
+            )
+            if len(compare) > 3:
+                st.caption("Comparison is limited to the first three selected options.")
+            to_compare = compare[:3]
+            if to_compare:
+                fields = [
+                    ("Suggested change", "summary"),
+                    ("Intended outcome", "outcome"),
+                    ("Estimated effort", "effort"),
+                    ("Future measurement", "metric"),
+                    ("Decision rule", "change_mind"),
+                ]
+                table = {
+                    catalog[action_id]["title"]: [
+                        str(catalog[action_id].get(key, "Not available"))
+                        for _, key in fields
+                    ]
+                    for action_id in to_compare
+                }
+                st.table(pd.DataFrame(table, index=[label for label, _ in fields]))
+            st.caption(
+                "Comparisons here do not change your selected action plan. "
+                "Use the checkboxes above to choose actions."
+            )
+        with lens_tab:
+            dimension = st.selectbox(
+                "Accessibility dimension",
+                DIMENSION_NAMES,
+                key="story_inclusive_dimension",
+            )
+            info = get_dimension_info(dimension)
+            if info:
+                st.markdown("**What the survey currently establishes**")
+                st.write(info["established"])
+                st.markdown("**What remains unknown**")
+                st.write(info["unknown"])
+                st.markdown("**Possible changes to test**")
+                for item in info["design_choices"]:
+                    st.write("- " + item)
+                st.markdown("**Optional future survey questions**")
+                for item in info["future_questions"]:
+                    st.write("- " + item)
+                st.caption(info["interpretation"])
 
 
 def render_reports(clean_df: pd.DataFrame, summary: dict,
@@ -843,8 +899,8 @@ def render_reports(clean_df: pd.DataFrame, summary: dict,
     """Show a visual report preview and preserve Person 5's real PDF + JSON exports."""
     heading(
         "06 / REPORTS",
-        "A plan they can take with them.",
-        "Download an Improvement Brief with survey findings and the actions you selected.",
+        "Findings they can take forward.",
+        "Download an Improvement Brief now—or add an action plan in Intervention Planner first.",
     )
     if clean_df.empty:
         st.info("No responses match the current filters.")
@@ -857,7 +913,7 @@ def render_reports(clean_df: pd.DataFrame, summary: dict,
         '<div class="ba-paper">',
         '<div class="paper-label">EveryMind · 988 Training</div>',
         '<h2>Improvement Brief</h2>',
-        '<p>Beyond Awareness / Current Survey</p>',
+        '<p>Beyond Awareness / ' + esc(source_label) + '</p>',
         '<div class="line"></div>',
         '<div class="paper-label">Survey responses</div>',
         '<p style="font-size:1.5rem;color:#173F30;font-weight:700;margin:5px 0">'
@@ -865,7 +921,10 @@ def render_reports(clean_df: pd.DataFrame, summary: dict,
         '<div class="paper-label" style="margin-top:20px">Selected improvements</div>',
     ]
     if not selected:
-        st.info("This report works without an action plan: you can generate a findings-only Improvement Brief right now. To add recommendations, open Intervention Planner and select improvements.")
+        st.caption(
+            "No action plan needed: generate a findings-only report below. "
+            "To include next steps, choose them in Intervention Planner."
+        )
     if plans:
         for i, plan in enumerate(plans, 1):
             preview.append(
@@ -873,10 +932,11 @@ def render_reports(clean_df: pd.DataFrame, summary: dict,
                 + '</b><br>' + esc(plan["proposed_change"]) + '</p>'
             )
     else:
-        preview.append('<p>No actions selected yet. Choose them in Intervention Planner.</p>')
+        preview.append('<p>Findings-only brief · no interventions selected.</p>')
     preview.append(
-        '<div class="line"></div><p>Includes training metrics, evidence limits, '
-        'an action plan, and an evaluation roadmap.</p></div>'
+        '<div class="line"></div><p>Includes training metrics, response coverage, '
+        'evidence limits, ' + ('selected next steps' if plans else 'a findings summary')
+        + ', and an evaluation roadmap.</p></div>'
     )
     st.markdown("".join(preview), unsafe_allow_html=True)
 
