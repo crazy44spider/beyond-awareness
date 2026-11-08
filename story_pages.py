@@ -429,9 +429,9 @@ def _draw_theme_donut(counts: pd.Series, selected: str, key: str) -> None:
         paper_bgcolor="white",
         plot_bgcolor="white",
     )
+    _lock_figure(fig)
     st.plotly_chart(
-        fig, key=key, width="stretch", theme=None,
-        config={"displayModeBar": False, "displaylogo": False},
+        fig, key=key, width="stretch", theme=None, config=PLOT_CONFIG,
     )
 
 
