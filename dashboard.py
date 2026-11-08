@@ -197,6 +197,31 @@ def render_overview(summary):
             "Missing answers and unusable values are not treated as unwillingness."
         )
 
+    with st.expander("Original dashboard indicators · full metrics"):
+        # Preserve all six indicators from the previous Overview, now optional.
+        extra = st.columns(3)
+        for col, label, value in zip(
+            extra,
+            ["Survey rows", "Training dates", "Fully paired knowledge rows"],
+            [
+                overview["survey_rows"],
+                overview["distinct_training_dates"],
+                overview["fully_paired_knowledge_rows"],
+            ],
+        ):
+            col.metric(label, f"{value:,}")
+        extra = st.columns(3)
+        extra[0].metric(
+            "Willingness answer coverage",
+            percent(overview["willingness_response_rate"]),
+        )
+        extra[1].metric("Training counties", overview["county_count"])
+        extra[2].metric("Role categories", overview["role_category_count"])
+        st.caption(
+            "These figures use the current filters. Survey rows and distinct IDs "
+            "do not necessarily represent distinct people."
+        )
+
     if n < summary["min_group_n"]:
         st.warning(
             f"Only {n} responses match these filters. "
