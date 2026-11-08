@@ -389,6 +389,49 @@ section[data-testid="stSidebar"],
     background:#FFFFFF !important;
     box-shadow:none !important;
 }
+
+/* Filter menu is a stable-width, vertically scrolling checklist.
+   Do not affect the separate Data Source upload popover. */
+[data-testid="stPopoverBody"]:has(.ba-filter-menu-marker) {
+    width:min(400px, calc(100vw - 24px)) !important;
+    min-width:min(400px, calc(100vw - 24px)) !important;
+    max-width:min(400px, calc(100vw - 24px)) !important;
+    max-height:min(74dvh, 640px) !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    box-sizing:border-box !important;
+}
+[data-testid="stPopoverBody"]:has(.ba-filter-menu-marker) [data-testid="stExpander"] {
+    width:100% !important;
+    min-width:0 !important;
+    margin-bottom:7px !important;
+    border:1px solid #DCE7DC !important;
+    border-radius:9px !important;
+    background:#F8FAF6 !important;
+}
+[data-testid="stPopoverBody"]:has(.ba-filter-menu-marker) [data-testid="stExpander"] details summary {
+    min-height:43px !important;
+    color:#214934 !important;
+    font-weight:650 !important;
+}
+[data-testid="stPopoverBody"]:has(.ba-filter-menu-marker) [data-testid="stCheckbox"] {
+    margin:0 !important;
+}
+[data-testid="stPopoverBody"]:has(.ba-filter-menu-marker) [data-testid="stCheckbox"] label {
+    padding:5px 0 !important;
+    line-height:1.3 !important;
+}
+[data-testid="stPopoverBody"]:has(.ba-filter-menu-marker) [data-testid="stButton"] button {
+    min-height:32px !important;
+    padding:5px 9px !important;
+    font-size:.77rem !important;
+    font-weight:600 !important;
+    border-radius:7px !important;
+}
+[data-testid="stPopoverBody"]:has(.ba-filter-menu-marker) [data-testid="stVerticalBlock"] {
+    min-width:0 !important;
+}
+
 [data-testid="stPopover"] button {
     width:100%;
     min-height:37px !important;
