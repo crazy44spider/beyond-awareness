@@ -385,7 +385,7 @@ def main():
     summary = build_summary(filtered, min_group_n=min_n)
 
     st.caption(
-        f"{source_label} · {len(filtered):,} of {len(result.clean_df):,} responses in view"
+        f"{source_label} · {len(filtered):,} of {len(result.clean_df):,} responses in view · Loaded {st.session_state['loaded_at']}"
     )
     if source_label.startswith("Synthetic"):
         st.warning(
