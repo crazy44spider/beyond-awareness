@@ -245,9 +245,7 @@ def render_training_outcomes(clean_df: pd.DataFrame, summary: dict) -> None:
             showlegend=index == 0, name="Current",
             hovertemplate="%{y}: %{x:.2f}<extra>Current</extra>",
         ))
-    fig.update_layout(
-        title=dict(text="Recalled-before vs. current ratings", x=.02, font=dict(size=15)),
-    )
+    st.subheader("Recalled-before vs. current knowledge ratings")
     fig.update_xaxes(range=[.8, 5.2], title="Agreement score, 1–5", dtick=1)
     fig.update_yaxes(
         categoryorder="array",
@@ -256,7 +254,7 @@ def render_training_outcomes(clean_df: pd.DataFrame, summary: dict) -> None:
         tickfont=dict(size=12),
         automargin=True,
     )
-    _plot(fig, "story_learning_dumbbell", height=285, left=175)
+    _plot(fig, "story_learning_dumbbell", height=330, left=185)
 
     improved = [label for label, item in usable
                 if float(item["after_mean"]) > float(item["before_mean"])]
@@ -278,13 +276,12 @@ def render_training_outcomes(clean_df: pd.DataFrame, summary: dict) -> None:
         "Participants reported what they remembered knowing before the training only afterward. "
         "These comparisons describe perceptions, not causal effects."
     )
-    if st.button(
-        "See distributions and group comparisons",
+    st.button(
+        "See distributions and group comparisons in Data Explorer",
         key="outcomes_to_details",
         on_click=_navigate,
         args=("Detailed Analysis",),
-    ):
-        pass
+    )
 
 
 def render_gap_diagnostic(clean_df: pd.DataFrame) -> None:
@@ -306,56 +303,74 @@ def render_gap_diagnostic(clean_df: pd.DataFrame) -> None:
     coverage = (answered / total) if total else 0.0
     pct = round(coverage * 100, 1)
 
-    st.subheader("First, who answered?")
+    st.subheader("How many answered the willingness-to-call question?")
     st.progress(coverage)
+    st.caption(f"{answered:,} of {total:,} survey responses answered ({pct:.1f}%).")
     l, r = st.columns(2)
     with l:
-        st.metric("Answered the call question", f"{answered:,}", help=f"{pct}% of {total:,}")
+        st.metric("Usable willingness answers", f"{answered:,} of {total:,}")
     with r:
-        st.metric("No usable call answer", f"{missing:,}")
+        st.metric("Missing or invalid answers", f"{missing:,} of {total:,}")
     st.caption(
-        "The unanswered responses cannot be interpreted as unwillingness. "
-        "Some survey versions may not have asked the question."
+        "The survey measures reported willingness to CALL 988, not actual use. "
+        "A missing answer is not evidence of unwillingness."
     )
 
     st.divider()
-    st.subheader("Among people who answered both questions")
     n = int(relation["complete_case_n"])
     gap = int(relation["gap_count"])
+    st.subheader("Knowing when to use 988 vs. willingness to call")
     if n > 0:
         rate = gap / n
-        left, right = st.columns([1, 2], gap="large")
-        with left:
-            st.markdown(
-                f'<div style="font:600 3.7rem Georgia,serif;color:{FOREST};'
-                f'letter-spacing:-.07em;line-height:1.1">{rate*100:.0f}%</div>',
-                unsafe_allow_html=True,
+        if gap == 0:
+            interpretation = (
+                f"None of the {n:,} responses with both answers showed "
+                "high knowledge AND lower willingness to call."
             )
-            st.caption(f"{gap:,} of {n:,} complete answers")
-        with right:
-            takeaway(
-                "High knowledge, but lower willingness to call.",
-                "These respondents rated knowing when to use 988 at 4–5 "
-                "and willingness to call at 0–5. The survey doesn't explain why.",
-                label="DEFINED PATTERN",
+        else:
+            interpretation = (
+                "of responses with both answers showed high knowledge "
+                "but lower willingness to call 988."
             )
+        st.markdown(
+            '<div class="ba-gap-result">'
+            f'<div class="ba-gap-number">{rate*100:.0f}%</div>'
+            f'<div class="ba-gap-definition">{esc(interpretation)}</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"**{gap:,} of {n:,} paired survey responses** match this pattern."
+        )
+        st.markdown(
+            '<div class="ba-definition-note">'
+            '<b>High knowledge:</b> knowing when to use 988 rated 4–5 out of 5. '
+            '<b>Lower willingness:</b> willingness to call rated 0–5 out of 10.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
     else:
-        st.info("There are not enough complete knowledge-and-call responses to compare.")
+        st.info(
+            "No responses have both a usable knowledge-of-988 rating and "
+            "a willingness-to-call rating. This gap cannot be calculated."
+        )
 
-    st.markdown("### What could explain the gap?")
+    st.markdown("### What the percentage cannot tell us")
     st.write(
-        "Trust, privacy, preferring text, uncertainty about needing help—"
-        "all are possibilities **not measured directly** by this survey."
+        "The survey doesn't ask **why** some respondents hesitate. "
+        "Trust, confidentiality, and preferring text or chat are questions "
+        "worth investigating—not explanations established by this data."
     )
     st.button(
-        "See questions that could fill the gaps",
+        "Explore follow-up questions in Survey Designer",
         on_click=_navigate,
         args=("Survey Designer",),
         key="gap_to_survey",
     )
     st.caption(
-        "For cross-tabulations, score distributions and the Spearman correlation, "
-        "use Detailed Analysis. The relationship is observational."
+        "The denominator includes only responses with BOTH usable answers. "
+        "For underlying distributions and correlations, open Data Explorer. "
+        "These are self-reported intentions, not observed behavior."
     )
 
 
