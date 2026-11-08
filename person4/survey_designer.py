@@ -1,6 +1,7 @@
 from pathlib import Path
 import pandas as pd
 import re
+from cleaning import EXPECTED_COLUMNS, SOURCE_HEADERS
 
 # Find the main project folder, regardless of where Python is run
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -348,80 +349,154 @@ def standardize_survey(df):
 # PART 4C: ACCESSIBILITY COVERAGE AUDIT
 # ============================================================
 
+# The 10 original survey-question proposals are the source of truth for
+# measurement dimensions. We inspect questionnaire HEADERS only: seeing a
+# keyword in a participant's answer does not mean a question was asked.
+_DIMENSION_QUESTIONS = {
+    dimension: [q["id"] for q in question_bank if q["dimension"] == dimension]
+    for dimension in dict.fromkeys(q["dimension"] for q in question_bank)
+}
+
+# Deliberately conservative signatures for paraphrased additions. Exact
+# question_bank wording and explicit IDs are also supported. A classifier may
+# miss a paraphrase; staff can inspect the recognized-question details.
+_QUESTION_PATTERNS = {
+    "CUL01": (r"\b(family|community|communities|stigma|cultural)\b",
+              r"\b(acceptab|support|seek|seeking|mental health|attitude)"),
+    "CUL02": (r"\b(training|presentation|session)\b",
+              r"\b(cultur|family expectations|language needs|intergenerational)"),
+    "PRA01": (r"\b(988|support|crisis|help)\b",
+              r"\b(practical|barrier|difficult|prevent|limited|internet|private space|caregiv|transport|disabilit)"),
+    "PRA02": (r"\b988\b",
+              r"\b(cost|free|insurance|transportation)\b"),
+    "COM01": (r"\b988\b",
+              r"\b(text|texting|chat|messag|preferred method|contact method|ways of contacting)\b"),
+    "COM02": (r"\b988\b",
+              r"\b(language|interpret|asl|sign language|communication needs|communicat|accessib)"),
+    "TRU01": (r"\b(988|training|presentation|crisis)\b",
+              r"\b(confidential|privacy|police|emergency services|recording|anonymous|anonymity)"),
+    "TRU02": (r"\b(988|counselor|counsellor)\b",
+              r"\b(trust|respect|judg|listen|take.*serious)"),
+    "PSY01": (r"\b(988|support|help)\b",
+              r"\b(serious enough|own experience|my situation|need support|beyond suicid|not only suicid)"),
+    "PSY02": (r"\b(988|counselor|counsellor|personal experience)\b",
+              r"\b(comfortable|discuss|share|open up|talk about|personal|painful)"),
+}
+
+# These 20 mandatory survey fields measure some knowledge and response
+# variables already. They should not be mistaken for NEW direct questions.
+_CORE_HEADERS = {
+    normalize_header(name)
+    for name in (*EXPECTED_COLUMNS, *SOURCE_HEADERS)
+}
+
+
+def identify_direct_questions(data):
+    """Return mapped question IDs and original column headers.
+
+    Uses the question bank and transparent pattern rules; it does not use AI
+    to infer a survey question from an individual's free-text response.
+    """
+    found = {qid: [] for ids in _DIMENSION_QUESTIONS.values() for qid in ids}
+    supplements = []
+    for column in data.columns:
+        raw = str(column)
+        normalized = normalize_header(raw)
+        if normalized in _CORE_HEADERS or raw.endswith(("_raw", "_invalid")):
+            continue
+        if raw.startswith(("paired_",)) or raw in {
+            "role_list", "duplicate_id", "county_unmapped", "role_unmapped",
+            "language_unmapped", "paired_all_knowledge", "role_raw"
+        }:
+            continue
+        if not normalized:
+            continue
+        supplements.append(raw)
+        for question in question_bank:
+            qid = question["id"]
+            exact_wording = normalized == normalize_header(question["question"])
+            explicit_id = bool(re.match(r"^" + qid.lower() + r"(?:\b|$)", raw.lower()))
+            tests = _QUESTION_PATTERNS.get(qid, ())
+            paraphrase = bool(tests) and all(re.search(p, normalized) for p in tests)
+            if exact_wording or explicit_id or paraphrase:
+                found[qid].append(raw)
+    return {"by_id": found, "supplemental_columns": supplements,
+            "recognized_columns": sorted({c for cols in found.values() for c in cols})}
+
+
 def coverage_audit(data):
-    """
-    Identify important accessibility topics the survey
-    currently measures, partly measures, or does not
-    directly measure.
+    """Re-evaluate questionnaire *design* after every new upload.
 
-    IMPORTANT: This checks the SURVEY DESIGN.
-    It does NOT assume that respondents have barriers.
+    "Directly measured" means at least one direct follow-up question is
+    present, not that the full construct has been psychometrically validated.
     """
-
+    mapped = identify_direct_questions(data)
     has_language = any(
-        normalize_header(col) in {
-            "language",
-            "survey language"
-        }
+        normalize_header(col) in {"language", "survey language"}
         for col in data.columns
     )
-
-    cultural_status = (
-        "Partially measured"
-        if has_language
-        else "Not directly measured"
-    )
-
-    rows = [
-        {
-            "dimension": "Cultural & Linguistic",
-            "coverage": cultural_status,
-            "explanation": (
-                "Survey language may be recorded, but "
-                "community stigma and cultural fit are "
-                "not directly assessed."
-            )
-        },
-
-        {
-            "dimension": "Socioeconomic & Practical",
-            "coverage": "Not directly measured",
-            "explanation": (
-                "No direct question about practical barriers "
-                "such as phone access, internet, privacy, "
-                "time, or caregiving responsibilities."
-            )
-        },
-
-        {
-            "dimension": "Communication",
-            "coverage": "Partially measured",
-            "explanation": (
-                "The survey asks about willingness to CALL "
-                "988, but not preferences for text or chat."
-            )
-        },
-
-        {
-            "dimension": "Institutional Trust",
-            "coverage": "Not directly measured",
-            "explanation": (
-                "No direct rating of trust in counselors "
-                "or understanding confidentiality practices."
-            )
-        },
-
-        {
-            "dimension": "Psychological",
-            "coverage": "Not directly measured",
-            "explanation": (
-                "No direct question about emotional comfort "
-                "or whether someone feels their experiences "
-                "are serious enough to seek support."
-            )
+    has_call_intent = any(
+        normalize_header(col) in {
+            "willingness to call", "how likely are you to call 988",
         }
-    ]
+        for col in data.columns
+    ) or "willingness_to_call" in data.columns
 
+    descriptions = {
+        "Cultural & Linguistic": (
+            "Survey language is an administrative field; it doesn't measure "
+            "family attitudes or the cultural fit of the training."
+        ),
+        "Socioeconomic & Practical": (
+            "Practical access barriers such as phone/internet, cost, "
+            "time, or a private space were not directly asked about."
+        ),
+        "Communication": (
+            "The original survey asks about calling, not preferred texting "
+            "or chat contact methods or communication accessibility."
+        ),
+        "Institutional Trust": (
+            "Counselor trust, confidentiality, and emergency involvement "
+            "were not directly assessed."
+        ),
+        "Psychological": (
+            "Emotional comfort and the feeling that one's situation "
+            "merits support were not directly assessed."
+        ),
+    }
+    rows = []
+    for dimension, question_ids in _DIMENSION_QUESTIONS.items():
+        directly_asked = [
+            qid for qid in question_ids if mapped["by_id"].get(qid)
+        ]
+        headers = sorted({
+            header for qid in directly_asked for header in mapped["by_id"][qid]
+        })
+        if directly_asked:
+            status = "Directly measured"
+            summary = (
+                f"{len(headers)} added question(s) directly address this dimension. "
+                "That doesn't establish that every aspect of the dimension is covered."
+            )
+        elif (dimension == "Cultural & Linguistic" and has_language) or (
+            dimension == "Communication" and has_call_intent
+        ):
+            status = "Partially measured"
+            summary = descriptions[dimension]
+        else:
+            status = "Not directly measured"
+            summary = descriptions[dimension]
+        rows.append({
+            "dimension": dimension,
+            "coverage": status,
+            "explanation": summary,
+            "question_count": len(headers),
+            "matched_question_ids": directly_asked,
+            "matched_question_headers": headers,
+            "unmeasured_question_ids": [
+                qid for qid in question_ids if qid not in directly_asked
+            ],
+        })
     return pd.DataFrame(rows)
 
 
