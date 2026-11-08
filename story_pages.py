@@ -733,10 +733,14 @@ def render_survey_workspace(clean_df: pd.DataFrame) -> None:
         )
         st.markdown("**Finding audit trail**")
         for finding in report["findings"]:
-            with st.expander(f"{finding['source'].replace('_', ' ').capitalize()} · {finding['title']}"):
-                st.write(finding["description"])
-                for limitation in finding.get("limitations", []):
-                    st.caption(limitation)
+            st.markdown(
+                "**" + str(finding["source"]).replace("_", " ").capitalize()
+                + " · " + str(finding["title"]) + "**"
+            )
+            st.write(finding["description"])
+            for limitation in finding.get("limitations", []):
+                st.caption(limitation)
+            st.divider()
         st.markdown("**Coverage evidence**")
         st.dataframe(
             coverage[["dimension", "coverage", "question_count", "explanation"]],
