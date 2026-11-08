@@ -41,6 +41,7 @@ from pipeline import PipelineResult, build_summary, filter_survey, run_pipeline
 from dashboard import render_dashboard, render_quality, style_app
 from person4.survey_designer import analyze_survey, render_survey_designer
 from team_integration import render_gap_detector, render_action_lab, render_pdf_report
+from feedback_analyzer import analyze_feedback
 
 PAGES = ["Overview", "Gap Detector", "Participant Voices", "Accessibility Audit", "Action Lab", "Report"]
 NAV_LABELS = {
@@ -217,6 +218,60 @@ def render_team_page(page, clean_df):
     except Exception:
         st.error("The module failed or returned an invalid finding structure. No findings are shown; its owner needs to check the module.")
 
+
+
+def render_participant_voices(clean_df):
+    """Explore aggregate themes from the currently filtered workbook."""
+    st.header("What participants said")
+    st.caption("Explore what people valued and what they would change.")
+    if clean_df.empty:
+        st.info("No survey responses match the current filters.")
+        return
+
+    try:
+        analysis = analyze_feedback(clean_df)
+    except Exception:
+        st.error("Could not analyze feedback for this survey. Check its columns.")
+        return
+
+    tab = st.radio(
+        "Explore",
+        ["What people valued", "What people would improve"],
+        horizontal=True,
+        key="voice_category",
+    )
+    is_improve = tab == "What people would improve"
+    counts = analysis["improve_counts" if is_improve else "learned_counts"]
+    tag_col = "improve_themes" if is_improve else "learned_themes"
+    comments = "improve_en" if is_improve else "learned_en"
+    tagged = analysis["data"]
+    n = int(tagged[comments].notna().sum())
+    st.caption(f"{n:,} responses with comments · A comment may match multiple themes.")
+
+    if counts.empty:
+        st.info("No coded comments in this selection.")
+        return
+    counts = counts.head(12)
+    st.subheader("Most common themes")
+    st.bar_chart(counts.rename("Theme matches"), horizontal=True, height=330)
+    theme = st.selectbox("Explore a theme", counts.index.tolist())
+    matching = tagged[tagged[tag_col].apply(lambda tags: theme in tags)]
+    st.write(f"**{len(matching):,}** matching comments")
+    st.caption(
+        "Theme matches use keyword rules and may contain false positives. "
+        "Review examples privately before sharing them."
+    )
+    if st.checkbox(
+        "Show redacted comment examples (private review only)",
+        value=False,
+        key="private_comment_examples",
+    ):
+        st.warning(
+            "Automated name redaction is incomplete. Do not screenshot, "
+            "publish, or export these comments without a privacy review."
+        )
+        for value in matching[comments].dropna().head(5):
+            st.write(str(value))
 
 def select_source():
     """Use the local real workbook when available; otherwise ask for an upload.
@@ -439,6 +494,8 @@ def main():
         render_survey_designer(analyze_survey(filtered))
     elif page == "Action Lab":
         render_action_lab(filtered)
+    elif page == "Participant Voices":
+        render_participant_voices(filtered)
     else:
         render_team_page(page, filtered)
 
