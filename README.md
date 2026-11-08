@@ -31,19 +31,19 @@ The problem isn’t that the survey is bad, but the answers don’t really tell 
 ### 4. What it acc does.
 Instead of building a dashboard that produces seventeen graphs and wishes you good luck interpreting them, we organized Beyond Awareness around three questions.
 
-Understand: What happened?
+*Understand: What happened?*
 
 **Training Outcomes** examines reported knowledge changes and survey results.
 
 **Gap Detector** looks at answer coverage and the relationship between knowledge and willingness to call. Because a high knowledge score is encouraging, but it isn't the same thing as feeling ready to reach out.
 
-Listen: What r we missing?
+*Listen: What r we missing?*
 
 **Participant Voices** helps staff explore open-ended feedback, giving written responses a place alongside the numbers.
 
 **Survey Designer** identifies gaps in what the current survey measures and proposes follow-up questions linked to the findings. Sometimes the most important answer is the one nobody thought to ask for.
 
-Improve: Now what??
+*Improve: Now what??*
 
 **Intervention Planner** suggests practical changes to future training based on the patterns identified.
 
