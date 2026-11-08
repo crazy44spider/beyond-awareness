@@ -14,6 +14,7 @@ from typing import Any
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 
 from dashboard import (
     render_comparisons,
@@ -25,6 +26,7 @@ from dashboard import (
     render_overview as render_original_overview,
 )
 from feedback_analyzer import analyze_feedback
+from voice_explorer import make_voice_explorer_html
 from intervention_planner import (
     build_action_plan,
     get_intervention,
@@ -410,52 +412,72 @@ def _pick_themes(counts: pd.Series, max_items: int = 6) -> pd.Series:
     return visible.head(max_items)
 
 
-def _draw_theme_donut(counts: pd.Series, selected: str, key: str) -> None:
-    """Chart proportions are theme mentions, never percentages of participants."""
-    palette = [FOREST, JADE, BARK, "#6B9875", "#D4B58C", "#B7C9B3"]
-    colors = [FOREST if name == selected else palette[i % len(palette)]
-              for i, name in enumerate(counts.index)]
-    fig = go.Figure(go.Pie(
-        labels=list(counts.index),
-        values=[int(v) for v in counts.values],
-        hole=.74,
-        textinfo="none",
-        sort=False,
-        marker=dict(colors=colors, line=dict(color="#FFFFFF", width=3)),
-        hovertemplate="%{label}<br>%{value} theme matches<extra></extra>",
-        showlegend=False,
-    ))
-    fig.update_layout(
-        annotations=[dict(
-            text=f"<b>{len(counts)} themes</b><br>to explore",
-            x=.5, y=.5, showarrow=False,
-            font=dict(size=15, color=INK),
-            align="center",
-        )],
-        margin=dict(l=12, r=12, t=9, b=9),
-        height=292,
-        paper_bgcolor="white",
-        plot_bgcolor="white",
-    )
-    _lock_figure(fig)
-    st.plotly_chart(
-        fig, key=key, width="stretch", theme=None, config=PLOT_CONFIG,
-    )
+@st.cache_data(show_spinner=False, max_entries=8, ttl=3600)
+def _cached_voice_analysis(voice_df: pd.DataFrame) -> dict:
+    """Analyze each distinct filtered dataset once, not on every rerun.
+
+    Person 3's original classifier is unchanged. The subset contains only
+    fields that its analyzer actually uses, so caching is inexpensive and
+    invalidates when comments or the active filters/source change.
+    """
+    return analyze_feedback(voice_df)
+
+
+def _voice_entries(
+    result: dict, counts: pd.Series, *, tag_field: str, text_field: str
+) -> list[dict]:
+    """Build preview data in one pass over classified comments.
+
+    Only up to five masked and distinct example comments accompany any theme;
+    all original coded counts are preserved.
+    """
+    themes = [str(label) for label in counts.index]
+    samples = {name: [] for name in themes}
+    already_seen = {name: set() for name in themes}
+    tagged = result["data"]
+    for matched, comment in zip(tagged[tag_field], tagged[text_field]):
+        if not isinstance(matched, (list, tuple)) or not isinstance(comment, str):
+            continue
+        candidate = _private_preview(comment)
+        if not candidate.strip():
+            continue
+        for name in matched:
+            if name not in samples or len(samples[name]) >= 5:
+                continue
+            if candidate not in already_seen[name]:
+                already_seen[name].add(candidate)
+                samples[name].append(candidate)
+
+    return [
+        {"label": str(name), "count": int(value), "comments": samples[str(name)]}
+        for name, value in counts.items()
+    ]
 
 
 def render_participant_voices(clean_df: pd.DataFrame) -> None:
+    """Interactive theme and response explorer, instant client-side hover."""
     heading(
         "03 / PARTICIPANT VOICES",
-        "The responses behind the numbers.",
-        "Explore themes in what people valued and what they want to change.",
+        "The people behind the patterns.",
+        "Explore the topics that surfaced in written feedback. "
+        "Hover over a theme to see actual matching response examples.",
     )
     if clean_df.empty:
         st.info("No responses match these filters.")
         return
+
+    # Never hash the entire numeric analytics frame with list-valued roles.
+    # These five columns contain everything Person 3's analyzer needs.
+    cols = ["id", "valuable_feedback", "improvement_feedback"]
+    for extra in ("county", "participant_type"):
+        if extra in clean_df.columns:
+            cols.append(extra)
+    voice_df = clean_df[cols].copy()
     try:
-        result = analyze_feedback(clean_df)
+        with st.spinner("Reading participant feedback…"):
+            result = _cached_voice_analysis(voice_df)
     except (KeyError, ValueError):
-        st.error("The feedback columns could not be recognized in this survey.")
+        st.error("The written-feedback columns could not be recognized in this survey.")
         return
 
     modes = {
@@ -463,95 +485,56 @@ def render_participant_voices(clean_df: pd.DataFrame) -> None:
         "What people valued": ("learned_counts", "learned_themes", "learned_en"),
     }
     current_mode = st.radio(
-        "Feedback category",
+        "Explore feedback",
         list(modes),
         horizontal=True,
-        label_visibility="collapsed",
         key="story_voice_mode",
     )
     count_field, tag_field, text_field = modes[current_mode]
     tagged = result["data"]
-    count = int(tagged[text_field].notna().sum())
-    counts = _pick_themes(result[count_field])
+    comment_count = int(tagged[text_field].notna().sum())
+    counts = _pick_themes(result[count_field], max_items=7)
     if counts.empty:
-        st.info("No coded themes in the current survey selection.")
+        st.info("No actionable coded themes are available for this selection.")
+        with st.expander("All coded themes and methodology"):
+            st.dataframe(
+                result[count_field].rename("Theme mentions").rename_axis("Theme").reset_index(),
+                hide_index=True, width="stretch",
+            )
         return
 
+    entries = _voice_entries(
+        result, counts, tag_field=tag_field, text_field=text_field
+    )
     st.caption(
-        f"{count:,} responses with comments. Themes overlap; the donut represents "
-        "theme mentions across the displayed categories, not shares of participants."
+        f"{comment_count:,} written responses · "
+        f"{int(counts.sum()):,} mentions across the {len(counts)} featured themes. "
+        "One comment can appear in multiple themes."
     )
 
-    state_key = "voice_theme_improve" if current_mode == "What to improve" else "voice_theme_learned"
-    if st.session_state.get(state_key) not in counts.index:
-        st.session_state[state_key] = str(counts.index[0])
-    selected = st.session_state[state_key]
-    chart, legend = st.columns([1.15, 1.25], gap="large")
-    with chart:
-        _draw_theme_donut(counts, selected, f"voice_donut_{tag_field}")
-    with legend:
-        st.markdown("#### Choose a theme")
-        for idx, (label, value) in enumerate(counts.items()):
-            c1, c2 = st.columns([5, 1], gap="small")
-            with c1:
-                st.button(
-                    label,
-                    type="primary" if selected == label else "secondary",
-                    use_container_width=True,
-                    key=f"voice_choice_{tag_field}_{idx}",
-                    on_click=lambda which=label, k=state_key: st.session_state.update({k: which}),
-                )
-            with c2:
-                st.markdown(
-                    f'<div style="color:{MUTED};text-align:right;'
-                    f'padding:11px 0;font-size:.81rem">{int(value)}</div>',
-                    unsafe_allow_html=True,
-                )
-
-    selected = st.session_state[state_key]
-    matching = tagged.loc[
-        tagged[tag_field].apply(lambda x: isinstance(x, list) and selected in x),
-        text_field,
-    ].dropna()
-
-    st.markdown("### " + selected)
-    st.caption(f"{len(matching):,} matching comments · Rule-based coding, not human-verified.")
-    st.markdown(
-        "Responses are stored only in the current private application session. "
-        "Individual comments may include sensitive details."
+    # One self-contained iframe enables hover, keyboard focus, chart expansion
+    # and matching comments to update together, with no Python round trips.
+    components.html(
+        make_voice_explorer_html(
+            entries,
+            category=current_mode,
+            comment_count=comment_count,
+        ),
+        height=760,
+        scrolling=True,
     )
 
-    show = st.checkbox(
-        "Review matching comment examples privately",
-        value=False,
-        key=f"private_voice_{tag_field}",
-    )
-    if show:
-        st.warning(
-            "Private review only. Automated name, email and phone masking is incomplete; "
-            "do not screenshot, share, or export text without an approved privacy review."
-        )
-        for j, text in enumerate(matching.head(5), start=1):
-            with st.container(border=True):
-                st.caption(f"Comment {j} · masked preview")
-                st.write(_private_preview(text))
-    else:
-        takeaway(
-            "Explore themes without exposing private comments.",
-            "Select a theme above, then opt into private review only if you are authorized.",
-            label="PRIVACY FIRST",
-        )
-
-    with st.expander("Full coded theme counts and method"):
+    with st.expander("All coded theme counts and methodology"):
         st.dataframe(
-            result[count_field].rename("Theme matches").rename_axis("Theme").reset_index(),
+            result[count_field].rename("Theme mentions").rename_axis("Theme").reset_index(),
             hide_index=True,
             width="stretch",
         )
         st.caption(
-            "Counts describe rule-based matches. One comment can match multiple themes. "
-            "Spanish translations in the original research were tied to source IDs and "
-            "have not been automatically applied to new uploads. Manual checking is still needed."
+            "Person 3's original keyword-based categories are unchanged. "
+            "Counts are overlapping mentions, not population proportions. "
+            "Spanish translations from the original research aren't automatically "
+            "mapped to new uploads because they were tied to source IDs."
         )
 
 
