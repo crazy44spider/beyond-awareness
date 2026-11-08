@@ -42,6 +42,15 @@ from person4.survey_designer import analyze_survey, render_survey_designer
 from team_integration import render_gap_detector, render_action_lab, render_pdf_report
 
 PAGES = ["Overview", "Gap Detector", "Participant Voices", "Accessibility Audit", "Action Lab", "Report"]
+NAV_LABELS = {
+    "Overview": "🏠  Overview",
+    "Gap Detector": "📊  Gap Detector",
+    "Participant Voices": "💬  Participant Voices",
+    "Accessibility Audit": "📝  Survey Designer",
+    "Action Lab": "✨  Action Lab",
+    "Report": "📄  Reports",
+}
+
 MODULES = {
     "Gap Detector": ("gap_detector", "analyze_gaps"),
     "Participant Voices": ("qualitative", "analyze_feedback"),
@@ -235,62 +244,154 @@ def select_source():
 
 
 def sidebar_filters(clean_df, token):
+    """Keep all filters, but tuck them into one optional sidebar drawer."""
     if st.session_state.get("filter_source") != token:
-        for key in ["filter_counties", "filter_roles", "filter_languages", "filter_dates_enabled", "filter_dates"]:
+        for key in [
+            "filter_counties", "filter_roles", "filter_languages",
+            "filter_dates_enabled", "filter_dates",
+        ]:
+            st.session_state.pop(key, None)
+        # Don't reuse actions or an exported report from the previous workbook.
+        for key in ["chosen_actions", "generated_pdf_bytes", "generated_pdf_signature"]:
             st.session_state.pop(key, None)
         st.session_state["filter_source"] = token
         st.session_state["loaded_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    st.sidebar.divider()
-    st.sidebar.subheader("Explore the survey")
-    counties = st.sidebar.multiselect("Training county", sorted(clean_df["county"].dropna().unique()), key="filter_counties")
-    roles = st.sidebar.multiselect("Participant role", sorted({r for values in clean_df["role_list"] for r in values}), key="filter_roles")
-    languages = st.sidebar.multiselect("Language", sorted(clean_df["language"].dropna().unique()), key="filter_languages")
-    st.sidebar.caption("Empty selections include all categories. Selected roles match any chosen role; each row is counted once.")
-    dates = clean_df["training_date"].dropna()
-    use_dates = st.sidebar.checkbox("Filter by training date", key="filter_dates_enabled", disabled=dates.empty)
-    start = end = None
-    if use_dates and not dates.empty:
-        selected = st.sidebar.date_input("Training date range", value=(dates.min().date(), dates.max().date()),
-                                         min_value=dates.min().date(), max_value=dates.max().date(), key="filter_dates")
-        if len(selected) != 2:
-            st.info("Select both the start and end training dates.")
-            st.stop()
-        start, end = selected
-        st.sidebar.caption("Rows with missing/invalid training dates are excluded by the date filter.")
-    min_n = int(st.sidebar.number_input("Minimum paired n for comparisons", min_value=1, max_value=10000, value=20, step=1, key="min_group_n"))
-    filtered = filter_survey(clean_df, counties=counties, roles=roles, languages=languages, start_date=start, end_date=end)
-    selections = {"counties": counties, "roles": roles, "languages": languages,
-                  "start_date": start.isoformat() if start else None,
-                  "end_date": end.isoformat() if end else None, "min_group_n": min_n}
+
+    with st.sidebar.expander("🔎  Refine responses", expanded=False):
+        st.caption("Optional · filter every page using the same selection")
+        counties = st.multiselect(
+            "Training county",
+            sorted(clean_df["county"].dropna().unique()),
+            key="filter_counties",
+        )
+        roles = st.multiselect(
+            "Participant role",
+            sorted({r for values in clean_df["role_list"] for r in values}),
+            key="filter_roles",
+        )
+        languages = st.multiselect(
+            "Language",
+            sorted(clean_df["language"].dropna().unique()),
+            key="filter_languages",
+        )
+        dates = clean_df["training_date"].dropna()
+        use_dates = st.checkbox(
+            "Filter by training date", key="filter_dates_enabled", disabled=dates.empty
+        )
+        start = end = None
+        if use_dates and not dates.empty:
+            selected = st.date_input(
+                "Training date range",
+                value=(dates.min().date(), dates.max().date()),
+                min_value=dates.min().date(),
+                max_value=dates.max().date(),
+                key="filter_dates",
+            )
+            if len(selected) != 2:
+                st.info("Select both the start and end dates.")
+                st.stop()
+            start, end = selected
+
+        st.caption("Blank selections include every group. Multi-role responses are counted once.")
+        st.markdown("**Advanced comparison settings**")
+        min_n = int(
+            st.number_input(
+                "Minimum paired responses",
+                min_value=1,
+                max_value=10000,
+                value=20,
+                step=1,
+                key="min_group_n",
+                help="Groups with fewer paired answers than this are not compared.",
+            )
+        )
+
+    filtered = filter_survey(
+        clean_df,
+        counties=counties,
+        roles=roles,
+        languages=languages,
+        start_date=start,
+        end_date=end,
+    )
+    selections = {
+        "counties": counties,
+        "roles": roles,
+        "languages": languages,
+        "start_date": start.isoformat() if start else None,
+        "end_date": end.isoformat() if end else None,
+        "min_group_n": min_n,
+    }
+    st.sidebar.caption(f"Viewing **{len(filtered):,}** of {len(clean_df):,} survey rows")
     return filtered, selections, min_n
 
 
 def render_report(clean_df, summary, selections, source_label):
-    st.subheader("Report & aggregate export")
+    st.header("Your Improvement Brief")
+    st.caption(
+        "Turn the selected findings and actions into a shareable, aggregate-only PDF."
+    )
     if clean_df.empty:
         st.info("No rows match these filters. Clear a filter before exporting a report.")
         return
+
+    # Keep the original JSON export, but make it an advanced option.
     payload = {"data_source": source_label, "selections": selections, **summary}
-    st.download_button("Download aggregate summary (JSON)",
-                       json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False),
-                       file_name="metrics_summary.json", mime="application/json", key="aggregate_download")
-    st.caption("Current selection only. Includes aggregate metrics and limitations; excludes respondent rows, IDs, and comments. Small cells can still be sensitive; public sharing requires appropriate approval.")
     render_pdf_report(clean_df, summary, selections, source_label)
 
+    with st.expander("Advanced export · aggregate summary (JSON)"):
+        st.download_button(
+            "Download aggregate JSON",
+            json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False),
+            file_name="metrics_summary.json",
+            mime="application/json",
+            key="aggregate_download",
+        )
+        st.caption(
+            "Current selection only. Includes aggregate metrics and limitations, "
+            "not respondent rows, IDs, or comments. Small cells can still be sensitive; "
+            "public sharing requires approval."
+        )
+
+
+
 def main():
-    st.set_page_config(page_title="Beyond Awareness", page_icon="◉", layout="wide")
+    st.set_page_config(
+        page_title="Beyond Awareness",
+        page_icon="💜",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
     style_app()
-    st.sidebar.title("Beyond Awareness")
-    st.sidebar.caption("Representation · Measurement · Action")
-    page = st.sidebar.radio("Workspace", PAGES, key="workspace_page")
-    st.title("Beyond Awareness")
-    st.caption("Understanding 988 training · Survey insight workspace")
+    st.sidebar.markdown(
+        '<div style="padding:14px 4px 6px;line-height:1.17">'
+        '<span style="font-size:1.9rem" aria-hidden="true">💜</span>'
+        '<div style="color:#FFFFFF;font-size:1.6rem;font-weight:780;letter-spacing:-.04em">'
+        'Beyond<br>Awareness</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    st.sidebar.caption("From insight to action · More accessible support")
+    page = st.sidebar.radio(
+        "Navigation",
+        PAGES,
+        format_func=lambda item: NAV_LABELS[item],
+        label_visibility="collapsed",
+        key="workspace_page",
+    )
+
     result, source_label, token = select_source()
     filtered, selections, min_n = sidebar_filters(result.clean_df, token)
     summary = build_summary(filtered, min_group_n=min_n)
-    st.caption(f"{source_label} | {len(filtered):,} of {len(result.clean_df):,} rows selected | Loaded {st.session_state['loaded_at']}")
+
+    st.caption(
+        f"{source_label} · {len(filtered):,} of {len(result.clean_df):,} responses in view"
+    )
     if source_label.startswith("Synthetic"):
-        st.warning("SYNTHETIC DEMO — Every response shown here is generated for testing. These results are not findings from the real survey.")
+        st.warning(
+            "SYNTHETIC DEMONSTRATION · Fictional responses, not EveryMind findings."
+        )
+
     if page == "Overview":
         render_dashboard(filtered, summary)
         render_quality(result.quality)
@@ -304,8 +405,15 @@ def main():
         render_action_lab(filtered)
     else:
         render_team_page(page, filtered)
+
     st.divider()
-    st.caption("Interpretation: retrospective self-report, not causal evidence. County means training affiliation. Unmeasured barriers must not be presented as observed disparities.")
+    with st.expander("Important interpretation notes"):
+        st.caption(
+            "These are retrospective self-reports, not causal effects. "
+            "County means training affiliation, not participant residence. "
+            "Missing answers do not establish unwillingness. "
+            "Unmeasured barriers must not be presented as observed disparities."
+        )
 
 
 if __name__ == "__main__":
