@@ -38,7 +38,7 @@ from person4.survey_designer import (
     question_bank,
 )
 from story_theme import (
-    FOREST, GOLD, GRID, INK, JADE, MUTED, SAGE,
+    BARK, FOREST, GOLD, GRID, INK, JADE, MUTED, SAGE,
     esc, flow_step, guide_card, heading, kpis, pill, takeaway,
 )
 from team_integration import (
@@ -193,12 +193,12 @@ def render_training_outcomes(clean_df: pd.DataFrame, summary: dict) -> None:
         after = float(row["after_mean"])
         fig.add_trace(go.Scatter(
             x=[before, after], y=[y, y], mode="lines",
-            line=dict(color="#BCD9C5", width=8), showlegend=False,
+            line=dict(color="#D3C2AB", width=8), showlegend=False,
             hoverinfo="skip",
         ))
         fig.add_trace(go.Scatter(
             x=[before], y=[y], mode="markers",
-            marker=dict(color="#B5C4B6", size=15, line=dict(color="white", width=2)),
+            marker=dict(color=BARK, size=15, line=dict(color="white", width=2)),
             showlegend=index == 0, name="Recalled before",
             hovertemplate="%{y}: %{x:.2f}<extra>Recalled before</extra>",
         ))
@@ -352,7 +352,7 @@ def _pick_themes(counts: pd.Series, max_items: int = 6) -> pd.Series:
 
 def _draw_theme_donut(counts: pd.Series, selected: str, key: str) -> None:
     """Chart proportions are theme mentions, never percentages of participants."""
-    palette = [FOREST, JADE, "#4B9971", "#8FBFA0", GOLD, "#C6D3BF"]
+    palette = [FOREST, JADE, BARK, "#6B9875", "#D4B58C", "#B7C9B3"]
     colors = [FOREST if name == selected else palette[i % len(palette)]
               for i, name in enumerate(counts.index)]
     fig = go.Figure(go.Pie(
@@ -662,6 +662,8 @@ def render_intervention_roadmap(clean_df: pd.DataFrame) -> None:
     st.caption(
         "Effort is a planning estimate. Recommendations are proposals to test, not proven outcomes."
     )
+    with st.expander("Advanced action planning · comparison and inclusion tools"):
+        render_original_action_lab(clean_df)
 
 
 def render_reports(clean_df: pd.DataFrame, summary: dict,
@@ -729,61 +731,256 @@ def render_reports(clean_df: pd.DataFrame, summary: dict,
 
 
 def render_detailed_analysis(clean_df: pd.DataFrame, summary: dict, quality: dict) -> None:
-    """Original deep-dive functions preserved verbatim for analysts."""
+    """Numbers-first reference view. No legacy dashboards or duplicated action UI.
+
+    All calculations still come from the shared filtered summary. Data-quality
+    figures refer to the original, unfiltered uploaded source.
+    """
     heading(
-        "REFERENCE / DETAILED ANALYSIS",
-        "Every number, if you need it.",
-        "Explore distributions, group comparisons and data quality without "
-        "cluttering the main story.",
+        "REFERENCE / DATA EXPLORER",
+        "The numbers behind the findings.",
+        "A compact reference for sample sizes, ratings, response coverage and comparisons.",
     )
     if clean_df.empty:
-        st.info("No responses match these filters.")
+        st.info("No responses match the current filters.")
         return
 
-    tabs = st.tabs([
-        "Knowledge details", "Training ratings", "Representation",
-        "Response coverage", "Group comparisons", "Data quality",
-        "Knowledge & call", "Original overview", "Action tools",
-    ])
-    with tabs[0]:
-        render_knowledge(summary)
-    with tabs[1]:
-        render_experience(clean_df, summary)
-    with tabs[2]:
-        render_representation(summary)
-    with tabs[3]:
-        render_missingness(summary)
-    with tabs[4]:
-        render_comparisons(summary)
-    with tabs[5]:
-        render_quality(quality)
-    with tabs[6]:
-        willing = willingness_summary(clean_df)
-        comparison = knowledge_vs_willingness(clean_df)
-        st.markdown("#### Knowledge versus willingness")
-        st.write(
-            f"Complete paired answers: {comparison['complete_case_n']:,}; "
-            f"high-knowledge/lower-willingness cases: {comparison['gap_count']:,}."
-        )
-        st.dataframe(comparison["heatmap"], width="stretch")
-        st.dataframe(
-            pd.DataFrame(
-                list(willing["score_distribution"].items()),
-                columns=["Score", "Responses"],
-            ),
-            hide_index=True,
-            width="stretch",
-        )
-        corr = comparison["spearman_correlation"]
-        if corr is not None and not pd.isna(corr):
-            st.write(f"Spearman correlation: {float(corr):.3f}")
-        st.caption(
-            "Only matched, usable answers are included. No causal conclusion follows."
-        )
+    section = st.selectbox(
+        "Explore a dataset measure",
+        [
+            "Knowledge ratings",
+            "Training & willingness ratings",
+            "Participation",
+            "Answer coverage",
+            "Group comparisons",
+            "Knowledge & willingness",
+            "Data quality",
+        ],
+        key="data_explorer_section",
+    )
 
-    with tabs[7]:
-        # The original full-detail overview remains accessible, not deleted.
-        render_original_overview(summary)
-    with tabs[8]:
-        # Preserve Person 5's comparison mode and inclusive-action lens, too.
-        render_original_action_lab(clean_df)
+    if section == "Knowledge ratings":
+        st.markdown('<div class="ba-data-explorer-head"><h2>Knowledge ratings</h2>'
+                    '<p>Matched recalled-before and current answers; agreement scale 1–5.</p></div>',
+                    unsafe_allow_html=True)
+        rows = []
+        for topic, item in summary["knowledge"]["topics"].items():
+            rows.append({
+                "Topic": topic,
+                "Paired answers": item["n"],
+                "Recalled before": item["before_mean"],
+                "Current": item["after_mean"],
+                "Change": item["mean_change"],
+                "Incomplete pairs": item["missing_pair_rows"],
+            })
+        overall = summary["knowledge"]["overall_three_topic_mean"]
+        rows.append({
+            "Topic": "Three-topic average",
+            "Paired answers": overall["n"],
+            "Recalled before": overall["before_mean"],
+            "Current": overall["after_mean"],
+            "Change": overall["mean_change"],
+            "Incomplete pairs": overall["missing_pair_rows"],
+        })
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+        st.caption("Retrospective self-report. Each topic has its own matched sample; "
+                   "the three-topic average requires all six ratings.")
+
+    elif section == "Training & willingness ratings":
+        options = {
+            "Presenter engagement": "presenter_engagement",
+            "Presenter expertise": "presenter_expertise",
+            "Training organization": "training_organization",
+            "Recommend training": "recommend_training",
+            "Willingness to call 988": "willingness_to_call",
+        }
+        measure = st.selectbox("Question", list(options), key="data_explorer_rating")
+        field = options[measure]
+        dist = (
+            summary["distributions"]["training_experience"][field]
+            if field in summary["distributions"]["training_experience"]
+            else summary["distributions"][field]
+        )
+        a, b, c = st.columns(3)
+        a.metric("Usable answers", f'{dist["valid_n"]:,}')
+        b.metric("Missing or invalid", f'{dist["missing_or_invalid_n"]:,}')
+        c.metric("All selected rows", f'{dist["denominator_rows"]:,}')
+        st.markdown("#### Responses by score")
+        st.dataframe(
+            pd.DataFrame([
+                {"Score": int(item["value"]) if float(item["value"]).is_integer() else item["value"],
+                 "Responses": item["count"],
+                 "Share of valid answers": (
+                     round(item["share"] * 100, 1) if item["share"] is not None else None
+                 )}
+                for item in dist["values"]
+            ]).rename(columns={"Share of valid answers": "Share of valid answers (%)"}),
+            hide_index=True, width="stretch",
+        )
+        st.caption("Training items use 1–5 agreement ratings; recommendation and willingness "
+                   "questions use 0–10 scales. Self-reported intentions are not behavior.")
+
+    elif section == "Participation":
+        dimension = st.selectbox(
+            "Group by", ["County", "Participant role", "Survey language", "Training date"],
+            key="data_explorer_participation",
+        )
+        selected = {
+            "County": "county", "Participant role": "role", "Survey language": "language",
+        }
+        if dimension == "Training date":
+            records = summary["coverage"]["training_date"]["dates"]
+            frame = pd.DataFrame(
+                [{"Date": row["date"][:10], "Survey rows": row["n"]}
+                 for row in records]
+            )
+        else:
+            groups = summary["coverage"][selected[dimension]]["groups"]
+            frame = pd.DataFrame([
+                {
+                    "Category": row["category"],
+                    "Survey rows": row["n"],
+                    "Rows share (%)": round(100 * row["share_of_rows"], 1)
+                    if row["share_of_rows"] is not None else None,
+                    "Answered call question": row["willingness_valid_n"],
+                    "Call answer coverage (%)": round(100 * row["willingness_response_rate"], 1)
+                    if row["willingness_response_rate"] is not None else None,
+                }
+                for row in groups
+            ])
+        if frame.empty:
+            st.info("No categorized responses for this selection.")
+        else:
+            st.dataframe(frame, hide_index=True, width="stretch")
+        st.caption("Counts describe survey rows, not population representation. "
+                   "Participant roles can overlap.")
+
+    elif section == "Answer coverage":
+        labels = {
+            "before_identify": "Identify a crisis · recalled before",
+            "after_identify": "Identify a crisis · current",
+            "before_describe": "Describe 988 · recalled before",
+            "after_describe": "Describe 988 · current",
+            "before_when": "When to use 988 · recalled before",
+            "after_when": "When to use 988 · current",
+            "willingness_to_call": "Willingness to call 988",
+            "recommend_training": "Recommend training",
+        }
+        frame = pd.DataFrame([
+            {
+                "Question": labels.get(item["field"], item["field"].replace("_", " ").capitalize()),
+                "Usable": item["usable_n"],
+                "Blank": item["source_missing_n"],
+                "Invalid": item["invalid_or_unusable_n"],
+                "Total": item["denominator_rows"],
+            }
+            for item in summary["missingness"]
+        ])
+        st.dataframe(frame, hide_index=True, width="stretch")
+        st.caption("Blank and invalid answers are reported separately. Neither implies reluctance.")
+
+    elif section == "Group comparisons":
+        left, right = st.columns(2)
+        with left:
+            group = st.selectbox(
+                "Compare by", ["county", "role", "language"],
+                format_func=lambda k: {"county": "Training county",
+                                       "role": "Participant role",
+                                       "language": "Survey language"}[k],
+                key="data_explorer_compare_group",
+            )
+        with right:
+            topic = st.selectbox(
+                "Knowledge topic", list(summary["knowledge"]["topics"]),
+                key="data_explorer_compare_topic",
+            )
+        frame = pd.DataFrame([
+            {
+                "Group": item["category"],
+                "Survey rows": item["n"],
+                "Paired answers": item["knowledge"]["topics"][topic]["n"],
+                "Recalled before": item["knowledge"]["topics"][topic]["before_mean"],
+                "Current": item["knowledge"]["topics"][topic]["after_mean"],
+                "Change": item["knowledge"]["topics"][topic]["mean_change"],
+                "Small paired group": item["knowledge"]["topics"][topic]["suppressed"],
+            }
+            for item in summary["group_comparisons"][group]
+        ])
+        if frame.empty:
+            st.info("No groups match the current selection.")
+        else:
+            st.dataframe(frame, hide_index=True, width="stretch")
+        st.caption(f"Mean comparisons are suppressed when fewer than {summary['min_group_n']} "
+                   "paired responses are available. Role groups may overlap.")
+
+    elif section == "Knowledge & willingness":
+        call = willingness_summary(clean_df)
+        related = knowledge_vs_willingness(clean_df)
+        usable = int(call["answered"])
+        n = int(call["total_responses"])
+        paired = int(related["complete_case_n"])
+        gap = int(related["gap_count"])
+        st.dataframe(
+            pd.DataFrame([
+                {"Measure": "Survey rows", "Count": n},
+                {"Measure": "Answered willingness question", "Count": usable},
+                {"Measure": "Answered knowledge and willingness", "Count": paired},
+                {"Measure": "High knowledge / lower willingness", "Count": gap},
+            ]),
+            hide_index=True, width="stretch",
+        )
+        st.markdown("#### Knowledge versus willingness — cross-tabulated counts")
+        st.dataframe(related["heatmap"], width="stretch")
+        score_counts = call["score_distribution"]
+        st.markdown("#### Willingness scores")
+        st.dataframe(
+            pd.DataFrame([{"Score": k, "Responses": v}
+                          for k, v in score_counts.items()]),
+            hide_index=True, width="stretch",
+        )
+        corr = related["spearman_correlation"]
+        if corr is not None and not pd.isna(corr):
+            st.caption(f"Spearman correlation among usable paired answers: {float(corr):.3f}. "
+                       "Association is descriptive, not causal.")
+        else:
+            st.caption("Correlation not available for this selection.")
+
+    elif section == "Data quality":
+        st.caption("This section reports diagnostics for the FULL uploaded workbook "
+                   "before page filters, not only the current selection.")
+        overview = [
+            ("Source survey rows", quality.get("original_row_count")),
+            ("Cleaned survey rows", quality.get("clean_row_count")),
+            ("Distinct nonblank IDs", quality.get("distinct_nonmissing_ids")),
+            ("Fully paired knowledge rows", quality.get("fully_paired_knowledge_rows")),
+            ("Valid willingness answers", quality.get("willingness_valid_rows")),
+            ("Training dates", quality.get("distinct_training_dates")),
+            ("Counties", quality.get("county_count")),
+        ]
+        st.dataframe(
+            pd.DataFrame([{"Measure": label, "Count": value} for label, value in overview]),
+            hide_index=True, width="stretch",
+        )
+        for field, title in [
+            ("duplicate_ids", "Duplicate-ID checks"),
+            ("invalid_values", "Invalid or nonstandard values"),
+            ("date_failures", "Date parsing failures"),
+            ("normalization_counts", "Normalization checks"),
+        ]:
+            values = quality.get(field, {})
+            if isinstance(values, dict) and values:
+                st.markdown(f"#### {title}")
+                st.dataframe(
+                    pd.DataFrame([
+                        {"Metric": str(k).replace("_", " ").capitalize(),
+                         "Count": value if isinstance(value, (int, float)) else str(value)}
+                        for k, value in values.items()
+                    ]),
+                    hide_index=True, width="stretch",
+                )
+        if quality.get("missingness"):
+            st.markdown("#### Missingness in the complete source")
+            frame = pd.DataFrame.from_dict(quality["missingness"], orient="index")
+            frame.index.name = "Question"
+            st.dataframe(frame.reset_index(), hide_index=True, width="stretch")
+
